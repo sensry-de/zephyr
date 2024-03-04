@@ -157,6 +157,7 @@
  * layouts.
  */
 
+/* actually I would move this to csr.h file, where all other definitions are located */
 #define MSTATUS_IEN     (1UL << 3)
 #define MSTATUS_MPP_M   (3UL << 11)
 #define MSTATUS_MPIE_EN (1UL << 7)
@@ -165,6 +166,10 @@
 #define MSTATUS_FS_INIT  (1UL << 13)
 #define MSTATUS_FS_CLEAN (2UL << 13)
 #define MSTATUS_FS_DIRTY (3UL << 13)
+
+
+#define USTATUS_IEN      (1UL << 0)
+#define USTATUS_UPIE_IEN (1UL << 4)
 
 /* This comes from openisa_rv32m1, but doesn't seem to hurt on other
  * platforms:
@@ -175,6 +180,7 @@
  *   by setting MPIE now, so it will be copied into IE on mret.
  */
 #define MSTATUS_DEF_RESTORE (MSTATUS_MPP_M | MSTATUS_MPIE_EN)
+#define USTATUS_DEF_RESTORE (USTATUS_UPIE_IEN | USTATUS_IEN)
 
 #ifndef _ASMLANGUAGE
 #include <zephyr/sys/util.h>
@@ -238,9 +244,9 @@ static ALWAYS_INLINE unsigned int arch_irq_lock(void)
 #else
 	unsigned int key;
 
-	__asm__ volatile ("csrrc %0, mstatus, %1"
+	__asm__ volatile ("csrrc %0, %1, %2"
 			  : "=r" (key)
-			  : "rK" (MSTATUS_IEN)
+			  : "i" (X_STATUS), "rK" (X_STATUS_IEN)
 			  : "memory");
 
 	return key;
@@ -254,11 +260,12 @@ static ALWAYS_INLINE unsigned int arch_irq_lock(void)
 static ALWAYS_INLINE void arch_irq_unlock(unsigned int key)
 {
 #ifdef CONFIG_RISCV_SOC_HAS_CUSTOM_IRQ_LOCK_OPS
+	extern void z_soc_irq_unlock(unsigned int key);
 	z_soc_irq_unlock(key);
 #else
-	__asm__ volatile ("csrs mstatus, %0"
+	__asm__ volatile ("csrs %0, %1"
 			  :
-			  : "r" (key & MSTATUS_IEN)
+			  : "i" (X_STATUS), "r" (key & X_STATUS_IEN)
 			  : "memory");
 #endif
 }
@@ -266,9 +273,10 @@ static ALWAYS_INLINE void arch_irq_unlock(unsigned int key)
 static ALWAYS_INLINE bool arch_irq_unlocked(unsigned int key)
 {
 #ifdef CONFIG_RISCV_SOC_HAS_CUSTOM_IRQ_LOCK_OPS
+	extern bool z_soc_irq_unlocked(unsigned int key);
 	return z_soc_irq_unlocked(key);
 #else
-	return (key & MSTATUS_IEN) != 0;
+	return (key & X_STATUS_IEN) != 0;
 #endif
 }
 

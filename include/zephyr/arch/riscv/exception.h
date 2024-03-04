@@ -72,8 +72,8 @@ struct __esf {
 	unsigned long a7;		/* function argument */
 #endif /* !CONFIG_RISCV_ISA_RV32E */
 
-	unsigned long mepc;		/* machine exception program counter */
-	unsigned long mstatus;	/* machine status register */
+	unsigned long x_epc;		/* machine exception program counter */
+	unsigned long x_status;		/* machine status register */
 
 	unsigned long s0;		/* callee-saved s0 */
 

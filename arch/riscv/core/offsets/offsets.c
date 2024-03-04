@@ -108,8 +108,8 @@ GEN_OFFSET_SYM(z_arch_esf_t, a6);
 GEN_OFFSET_SYM(z_arch_esf_t, a7);
 #endif /* !CONFIG_RISCV_ISA_RV32E */
 
-GEN_OFFSET_SYM(z_arch_esf_t, mepc);
-GEN_OFFSET_SYM(z_arch_esf_t, mstatus);
+GEN_OFFSET_SYM(z_arch_esf_t, x_epc);
+GEN_OFFSET_SYM(z_arch_esf_t, x_status);
 
 GEN_OFFSET_SYM(z_arch_esf_t, s0);
 

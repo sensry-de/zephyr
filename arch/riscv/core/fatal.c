@@ -141,8 +141,8 @@ FUNC_NORETURN void z_riscv_fatal_error_csf(unsigned int reason, const z_arch_esf
 #endif
 		LOG_ERR("     sp: " PR_REG, sp);
 		LOG_ERR("     ra: " PR_REG, esf->ra);
-		LOG_ERR("   mepc: " PR_REG, esf->mepc);
-		LOG_ERR("mstatus: " PR_REG, esf->mstatus);
+		LOG_ERR("   mepc: " PR_REG, esf->x_epc);
+		LOG_ERR("mstatus: " PR_REG, esf->x_status);
 		LOG_ERR("");
 #ifdef CONFIG_RISCV_EXCEPTION_STACK_TRACE
 		unwind_stack(esf);

@@ -184,12 +184,12 @@ SECTION_FUNC(exception.entry, _isr_wrapper)
 	get_current_cpu s0
 
 	/* Save MEPC register */
-	csrr t0, mepc
-	sr t0, __z_arch_esf_t_mepc_OFFSET(sp)
+	csrr t0, x_epc
+	sr t0, __z_arch_esf_t_x_epc_OFFSET(sp)
 
 	/* Save MSTATUS register */
-	csrr t2, mstatus
-	sr t2, __z_arch_esf_t_mstatus_OFFSET(sp)
+	csrr t2, x_status
+	sr t2, __z_arch_esf_t_x_status_OFFSET(sp)
 
 #if defined(CONFIG_FPU_SHARING)
 	/* determine if FPU access was disabled */
@@ -312,7 +312,7 @@ no_fp:	/* increment _current->arch.exception_depth */
 	jal ra, __soc_is_irq
 	bnez a0, is_interrupt
 #else
-	csrr t0, mcause
+	csrr t0, x_cause
 	srli t0, t0, RISCV_MCAUSE_IRQ_POS
 	bnez t0, is_interrupt
 #endif
@@ -322,7 +322,7 @@ no_fp:	/* increment _current->arch.exception_depth */
 	 * perform a context-switch or an IRQ offload. Otherwise call _Fault
 	 * to report the exception.
 	 */
-	csrr t0, mcause
+	csrr t0, x_cause
 	li t2, CONFIG_RISCV_MCAUSE_EXCEPTION_MASK
 	and t0, t0, t2
 
@@ -363,9 +363,9 @@ is_kernel_syscall:
 	 * It's safe to always increment by 4, even with compressed
 	 * instructions, because the ecall instruction is always 4 bytes.
 	 */
-	lr t0, __z_arch_esf_t_mepc_OFFSET(sp)
+	lr t0, __z_arch_esf_t_x_epc_OFFSET(sp)
 	addi t0, t0, 4
-	sr t0, __z_arch_esf_t_mepc_OFFSET(sp)
+	sr t0, __z_arch_esf_t_x_epc_OFFSET(sp)
 
 #ifdef CONFIG_PMP_STACK_GUARD
 	/* Re-activate PMP for m-mode */
@@ -569,7 +569,7 @@ on_irq_stack:
 #endif
 
 	/* Get IRQ causing interrupt */
-	csrr a0, mcause
+	csrr a0, x_cause
 	li t0, CONFIG_RISCV_MCAUSE_EXCEPTION_MASK
 	and a0, a0, t0
 
@@ -674,10 +674,10 @@ fp_trap_exit:
 #endif
 
 	/* Restore MEPC and MSTATUS registers */
-	lr t0, __z_arch_esf_t_mepc_OFFSET(sp)
-	lr t2, __z_arch_esf_t_mstatus_OFFSET(sp)
-	csrw mepc, t0
-	csrw mstatus, t2
+	lr t0, __z_arch_esf_t_x_epc_OFFSET(sp)
+	lr t2, __z_arch_esf_t_x_status_OFFSET(sp)
+	csrw x_epc, t0
+	csrw x_status, t2
 
 #ifdef CONFIG_USERSPACE
 	/*
@@ -735,4 +735,4 @@ fp_trap_exit:
 
 #endif /* CONFIG_RISCV_SOC_HAS_ISR_STACKING */
 
-	mret
+	x_ret
