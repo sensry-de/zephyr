@@ -11,7 +11,8 @@ menuconfig BMA4XX
 	default y
 	depends on DT_HAS_BOSCH_BMA4XX_ENABLED
 	depends on SENSOR_ASYNC_API
-	select I2C
+	select I2C if $(dt_compat_on_bus,$(DT_COMPAT_BOSCH_BME680),i2c)
+	select SPI if $(dt_compat_on_bus,$(DT_COMPAT_BOSCH_BME680),spi)
 	select I2C_RTIO
 	select RTIO_WORKQ
 	help

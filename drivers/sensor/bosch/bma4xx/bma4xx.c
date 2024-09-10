@@ -281,6 +281,7 @@ static int bma4xx_chip_init(const struct device *dev)
 		LOG_WRN("Driver tested for BMA422/BMA400. Check for unintended operation.");
 	case BMA4XX_CHIP_ID_BMA400:
 	case BMA4XX_CHIP_ID_BMA422:
+	case BMA4XX_CHIP_ID_BMA456:
 		break;
 	default:
 		LOG_ERR("Chip id (0x%02X) not supported", bma4xx->chip_id);
@@ -335,6 +336,255 @@ static int bma4xx_attr_get(const struct device *dev, enum sensor_channel chan,
 	}
 }
 
+int bma4xx_sensor_sample_fetch(const struct device *dev, enum sensor_channel chan)
+{
+	struct bma4xx_data *bma4xx = dev->data;
+
+	int16_t values[3];
+	int8_t temperature;
+	bma4xx_sample_fetch(dev, &values[0], &values[1], &values[2]);
+	bma4xx_temp_fetch(dev, &temperature);
+
+	switch (chan) {
+	case SENSOR_CHAN_ACCEL_X:
+		bma4xx->fetched_values[0] = values[0];
+		return 0;
+	case SENSOR_CHAN_ACCEL_Y:
+		bma4xx->fetched_values[1] = values[1];
+		return 0;
+	case SENSOR_CHAN_ACCEL_Z:
+		bma4xx->fetched_values[2] = values[2];
+		return 0;
+	case SENSOR_CHAN_ACCEL_XYZ:
+		memcpy(bma4xx->fetched_values, values, sizeof(values));
+		return 0;
+	case SENSOR_CHAN_DIE_TEMP:
+		bma4xx->fetched_temperature = temperature;
+		return 0;
+	case SENSOR_CHAN_ALL:
+		memcpy(bma4xx->fetched_values, values, sizeof(values));
+		bma4xx->fetched_temperature = temperature;
+		return 0;
+	}
+
+	return -EINVAL;
+}
+
+static void bma4xx_convert_raw_accel_to_q31(int16_t raw_val, q31_t *out)
+{
+	/* The full calculation is (assuming floating math):
+	 *   value_ms2 = raw_value * range * 9.8065 / BIT(11)
+	 * We can treat 'range * 9.8065' as a scale, the scale is calculated by first getting 1g
+	 * represented as a q31 value with the same shift as our result:
+	 *   1g = (9.8065 * BIT(31)) >> shift
+	 * Next, we need to multiply it by our range in g, which for this driver is one of
+	 * [2, 4, 8, 16] and maps to a left shift of [1, 2, 3, 4]:
+	 *   1g <<= log2(range)
+	 * Note we used a right shift by 'shift' and left shift by log2(range). 'shift' is
+	 * [5, 6, 7, 8] for range values [2, 4, 8, 16] since it's the final shift in m/s2. It is
+	 * calculated via:
+	 *   shift = ceil(log2(range * 9.8065))
+	 * This means that we can shorten the above 1g alterations to:
+	 *   1g = (1g >> ceil(log2(range * 9.8065))) << log2(range)
+	 * For the range values [2, 4, 8, 16], the following is true:
+	 *   (x >> ceil(log2(range * 9.8065))) << log2(range)
+	 *   = x >> 4
+	 * Since the range cancels out in the right and left shift, we've now reduced the following:
+	 *   range * 9.8065 = 9.8065 * BIT(31 - 4)
+	 * All that's left is to divide by the bma4xx's maximum range BIT(11).
+	 */
+	const int64_t scale = (int64_t)(9.8065 * BIT64(31 - 4));
+
+	*out = CLAMP(((int64_t)raw_val * scale) >> 11, INT32_MIN, INT32_MAX);
+}
+
+#ifdef CONFIG_BMA4XX_TEMPERATURE
+/**
+ * @brief Convert the 8-bit temp register value into a Q31 celsius value
+ */
+static void bma4xx_convert_raw_temp_to_q31(int8_t raw_val, q31_t *out)
+{
+	/* Value of 0 equals 23 degrees C. Each bit count equals 1 degree C */
+
+	int64_t intermediate =
+		((int64_t)raw_val + 23) * ((int64_t)INT32_MAX + 1) / (1 << BMA4XX_TEMP_SHIFT);
+
+	*out = CLAMP(intermediate, INT32_MIN, INT32_MAX);
+}
+#endif /* CONFIG_BMA4XX_TEMPERATURE */
+
+static int bma4xx_one_shot_decode(const uint8_t *buffer, struct sensor_chan_spec ch,
+				  uint32_t *fit, uint16_t max_count, void *data_out)
+{
+	const struct bma4xx_encoded_data *edata = (const struct bma4xx_encoded_data *)buffer;
+	const struct bma4xx_decoder_header *header = &edata->header;
+	int rc;
+
+	if (*fit != 0) {
+		return 0;
+	}
+	if (max_count == 0 || ch.chan_idx != 0) {
+		return -EINVAL;
+	}
+
+	switch (ch.chan_type) {
+	case SENSOR_CHAN_ACCEL_X:
+	case SENSOR_CHAN_ACCEL_Y:
+	case SENSOR_CHAN_ACCEL_Z:
+	case SENSOR_CHAN_ACCEL_XYZ: {
+		if (!edata->has_accel) {
+			return -ENODATA;
+		}
+
+		struct sensor_three_axis_data *out = (struct sensor_three_axis_data *)data_out;
+
+		out->header.base_timestamp_ns = edata->header.timestamp;
+		out->header.reading_count = 1;
+		rc = bma4xx_get_shift((struct sensor_chan_spec){.chan_type = SENSOR_CHAN_ACCEL_XYZ,
+								.chan_idx = 0},
+				      header->accel_fs, &out->shift);
+		if (rc != 0) {
+			return -EINVAL;
+		}
+
+		bma4xx_convert_raw_accel_to_q31(edata->accel_xyz[0], &out->readings[0].x);
+		bma4xx_convert_raw_accel_to_q31(edata->accel_xyz[1], &out->readings[0].y);
+		bma4xx_convert_raw_accel_to_q31(edata->accel_xyz[2], &out->readings[0].z);
+
+		*fit = 1;
+		return 1;
+	}
+#ifdef CONFIG_BMA4XX_TEMPERATURE
+	case SENSOR_CHAN_DIE_TEMP: {
+		if (!edata->has_temp) {
+			return -ENODATA;
+		}
+
+		struct sensor_q31_data *out = (struct sensor_q31_data *)data_out;
+
+		out->header.base_timestamp_ns = edata->header.timestamp;
+		out->header.reading_count = 1;
+		rc = bma4xx_get_shift((struct sensor_chan_spec){.chan_type = SENSOR_CHAN_DIE_TEMP,
+								.chan_idx = 0}, 0, &out->shift);
+		if (rc != 0) {
+			return -EINVAL;
+		}
+
+		bma4xx_convert_raw_temp_to_q31(edata->temp, &out->readings[0].temperature);
+
+		*fit = 1;
+		return 1;
+	}
+#endif /* CONFIG_BMA4XX_TEMPERATURE */
+	default:
+		return -EINVAL;
+	}
+}
+
+static int bma4xx_decoder_decode(const uint8_t *buffer, struct sensor_chan_spec ch,
+				 uint32_t *fit, uint16_t max_count,
+				 void *data_out)
+{
+	const struct bma4xx_decoder_header *header = (const struct bma4xx_decoder_header *)buffer;
+
+	if (header->is_fifo) {
+		/* FIFO (streaming) mode operation is not yet supported */
+		return -ENOTSUP;
+	}
+
+	return bma4xx_one_shot_decode(buffer, ch, fit, max_count, data_out);
+}
+
+SENSOR_DECODER_API_DT_DEFINE() = {
+	.get_frame_count = bma4xx_decoder_get_frame_count,
+	.get_size_info = bma4xx_decoder_get_size_info,
+	.decode = bma4xx_decoder_decode,
+};
+
+static int bma4xx_get_decoder(const struct device *dev, const struct sensor_decoder_api **decoder)
+{
+	ARG_UNUSED(dev);
+	*decoder = &SENSOR_DECODER_NAME();
+
+	return 0;
+}
+
+int bma4xx_sensor_sample_fetch(const struct device *dev, enum sensor_channel chan)
+{
+	struct bma4xx_data *bma4xx = dev->data;
+
+	int16_t values[3];
+	int8_t temperature;
+	bma4xx_sample_fetch(dev, &values[0], &values[1], &values[2]);
+	bma4xx_temp_fetch(dev, &temperature);
+
+	switch (chan) {
+	case SENSOR_CHAN_ACCEL_X:
+		bma4xx->fetched_values[0] = values[0];
+		return 0;
+	case SENSOR_CHAN_ACCEL_Y:
+		bma4xx->fetched_values[1] = values[1];
+		return 0;
+	case SENSOR_CHAN_ACCEL_Z:
+		bma4xx->fetched_values[2] = values[2];
+		return 0;
+	case SENSOR_CHAN_ACCEL_XYZ:
+		memcpy(bma4xx->fetched_values, values, sizeof(values));
+		return 0;
+	case SENSOR_CHAN_DIE_TEMP:
+		bma4xx->fetched_temperature = temperature;
+		return 0;
+	case SENSOR_CHAN_ALL:
+		memcpy(bma4xx->fetched_values, values, sizeof(values));
+		bma4xx->fetched_temperature = temperature;
+		return 0;
+	}
+
+	return -EINVAL;
+}
+
+void q31_to_sensor_value(q31_t q31_value, struct sensor_value *sensor_val) {
+	// Extract the integer part by shifting right by 31 bits
+	sensor_val->val1 = (q31_value >> 31);
+
+	// Extract fractional part, scaled to micro-units (val2 is usually in microseconds or microvolts)
+	sensor_val->val2 = ((q31_value & 0x7FFFFFFF) * 1000000) >> 31;
+
+	// Handle negative values for fractional part
+	if (q31_value < 0 && sensor_val->val2 != 0) {
+		sensor_val->val1 -= 1;
+		sensor_val->val2 = 1000000 - sensor_val->val2;
+	}
+}
+
+int bma4xx_sensor_channel_get(const struct device *dev, enum sensor_channel chan,
+			 struct sensor_value *val)
+{
+	struct bma4xx_data *bma4xx = dev->data;
+
+	q31_t q31;
+
+	switch (chan) {
+	case SENSOR_CHAN_ACCEL_X:
+		bma4xx_convert_raw_accel_to_q31(bma4xx->fetched_values[0], &q31);
+		q31_to_sensor_value(q31, val);
+		return 0;
+	case SENSOR_CHAN_ACCEL_Y:
+		bma4xx_convert_raw_accel_to_q31(bma4xx->fetched_values[1], &q31);
+		q31_to_sensor_value(q31, val);
+		return 0;
+	case SENSOR_CHAN_ACCEL_Z:
+		bma4xx_convert_raw_accel_to_q31(bma4xx->fetched_values[2], &q31);
+		q31_to_sensor_value(q31, val);
+		return 0;
+	case SENSOR_CHAN_DIE_TEMP:
+		val->val1 = bma4xx->fetched_temperature;
+		return 0;
+	}
+
+	return -EINVAL;
+}
+
 /*
  * Sensor driver API
  */
@@ -344,6 +594,8 @@ static DEVICE_API(sensor, bma4xx_driver_api) = {
 	.attr_set = bma4xx_attr_set,
 	.get_decoder = bma4xx_get_decoder,
 	.submit = bma4xx_submit,
+	.sample_fetch = bma4xx_sensor_sample_fetch,
+	.channel_get = bma4xx_sensor_channel_get,
 };
 
 /*
