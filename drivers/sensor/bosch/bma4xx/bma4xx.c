@@ -247,8 +247,9 @@ static int bma4xx_chip_init(const struct device *dev)
 	}
 	LOG_DBG("chip_id is 0x%02x", bma4xx->chip_id);
 
-	if (bma4xx->chip_id != BMA4XX_CHIP_ID_BMA422) {
-		LOG_WRN("Driver tested for BMA422. Check for unintended operation.");
+	if ((bma4xx->chip_id != BMA4XX_CHIP_ID_BMA422) ||
+	    (bma4xx->chip_id != BMA4XX_CHIP_ID_BMA456)) {
+		LOG_WRN("Driver tested for BMA422, BMA456. Check for unintended operation.");
 	}
 
 	/* Issue soft reset command */
@@ -644,7 +645,8 @@ static int bma4xx_one_shot_decode(const uint8_t *buffer, struct sensor_chan_spec
 
 		out->header.base_timestamp_ns = edata->header.timestamp;
 		out->header.reading_count = 1;
-		rc = bma4xx_get_shift(SENSOR_CHAN_DIE_TEMP, 0, &out->shift);
+		rc = bma4xx_get_shift((struct sensor_chan_spec){.chan_type = SENSOR_CHAN_DIE_TEMP,
+								.chan_idx = 0}, 0, &out->shift);
 		if (rc != 0) {
 			return -EINVAL;
 		}
@@ -688,6 +690,82 @@ static int bma4xx_get_decoder(const struct device *dev, const struct sensor_deco
 	return 0;
 }
 
+int bma4xx_sensor_sample_fetch(const struct device *dev, enum sensor_channel chan)
+{
+	struct bma4xx_data *bma4xx = dev->data;
+
+	int16_t values[3];
+	int8_t temperature;
+	bma4xx_sample_fetch(dev, &values[0], &values[1], &values[2]);
+	bma4xx_temp_fetch(dev, &temperature);
+
+	switch (chan) {
+	case SENSOR_CHAN_ACCEL_X:
+		bma4xx->fetched_values[0] = values[0];
+		return 0;
+	case SENSOR_CHAN_ACCEL_Y:
+		bma4xx->fetched_values[1] = values[1];
+		return 0;
+	case SENSOR_CHAN_ACCEL_Z:
+		bma4xx->fetched_values[2] = values[2];
+		return 0;
+	case SENSOR_CHAN_ACCEL_XYZ:
+		memcpy(bma4xx->fetched_values, values, sizeof(values));
+		return 0;
+	case SENSOR_CHAN_DIE_TEMP:
+		bma4xx->fetched_temperature = temperature;
+		return 0;
+	case SENSOR_CHAN_ALL:
+		memcpy(bma4xx->fetched_values, values, sizeof(values));
+		bma4xx->fetched_temperature = temperature;
+		return 0;
+	}
+
+	return -EINVAL;
+}
+
+void q31_to_sensor_value(q31_t q31_value, struct sensor_value *sensor_val) {
+	// Extract the integer part by shifting right by 31 bits
+	sensor_val->val1 = (q31_value >> 31);
+
+	// Extract fractional part, scaled to micro-units (val2 is usually in microseconds or microvolts)
+	sensor_val->val2 = ((q31_value & 0x7FFFFFFF) * 1000000) >> 31;
+
+	// Handle negative values for fractional part
+	if (q31_value < 0 && sensor_val->val2 != 0) {
+		sensor_val->val1 -= 1;
+		sensor_val->val2 = 1000000 - sensor_val->val2;
+	}
+}
+
+int bma4xx_sensor_channel_get(const struct device *dev, enum sensor_channel chan,
+			 struct sensor_value *val)
+{
+	struct bma4xx_data *bma4xx = dev->data;
+
+	q31_t q31;
+
+	switch (chan) {
+	case SENSOR_CHAN_ACCEL_X:
+		bma4xx_convert_raw_accel_to_q31(bma4xx->fetched_values[0], &q31);
+		q31_to_sensor_value(q31, val);
+		return 0;
+	case SENSOR_CHAN_ACCEL_Y:
+		bma4xx_convert_raw_accel_to_q31(bma4xx->fetched_values[1], &q31);
+		q31_to_sensor_value(q31, val);
+		return 0;
+	case SENSOR_CHAN_ACCEL_Z:
+		bma4xx_convert_raw_accel_to_q31(bma4xx->fetched_values[2], &q31);
+		q31_to_sensor_value(q31, val);
+		return 0;
+	case SENSOR_CHAN_DIE_TEMP:
+		val->val1 = bma4xx->fetched_temperature;
+		return 0;
+	}
+
+	return -EINVAL;
+}
+
 /*
  * Sensor driver API
  */
@@ -696,6 +774,8 @@ static DEVICE_API(sensor, bma4xx_driver_api) = {
 	.attr_set = bma4xx_attr_set,
 	.submit = bma4xx_submit,
 	.get_decoder = bma4xx_get_decoder,
+	.sample_fetch = bma4xx_sensor_sample_fetch,
+	.channel_get = bma4xx_sensor_channel_get,
 };
 
 /*
@@ -708,7 +788,7 @@ static DEVICE_API(sensor, bma4xx_driver_api) = {
 
 #define BMA4XX_CONFIG_SPI(inst)                                                                    \
 	{                                                                                          \
-		.bus_cfg.spi = SPI_DT_SPEC_INST_GET(inst, 0, 0), .bus_init = &bma_spi_init,        \
+		.bus_cfg.spi = SPI_DT_SPEC_INST_GET(inst, 0, 0), .bus_init = &bma4xx_spi_init,     \
 	}
 
 /* Initializes a struct bma4xx_config for an instance on an I2C bus. */

@@ -150,6 +150,7 @@
 
 #define BMA4XX_CHIP_ID_BMA422 (0x12)
 #define BMA4XX_CHIP_ID_BMA423 (0x13)
+#define BMA4XX_CHIP_ID_BMA456 (0x16)
 
 /*
  * Other constants
@@ -197,6 +198,9 @@ struct bma4xx_hw_operations {
 };
 
 struct bma4xx_data {
+	/** Current values that are requested via the sensor fetch API */
+	int16_t fetched_values[3];
+	int8_t fetched_temperature;
 	/** Current full-scale range setting as a register value */
 	uint8_t accel_fs_range;
 	/** Current bandwidth parameter (BWP) as a register value */
