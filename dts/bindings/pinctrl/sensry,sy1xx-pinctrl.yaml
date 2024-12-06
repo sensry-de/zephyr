@@ -1,0 +1,37 @@
+# Copyright (c) 2024 sensry.io
+# SPDX-License-Identifier: Apache-2.0
+
+description: Sensry SY1xx PINCTRL
+
+compatible: "sensry,sy1xx-pinctrl"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true
+
+child-binding:
+  description: Each child node defines the configuration of a particular state.
+
+  include:
+    - name: pincfg-node.yaml
+      property-allowlist:
+        - bias-pull-down
+        - bias-pull-up
+        - drive-push-pull
+        - drive-open-drain
+        - output-high
+        - output-low
+
+  properties:
+    addr:
+      description: |
+        Encodes the address for the pin configuration register.
+      required: true
+      type: int
+    iro:
+      description: |
+        Encodes the offset in bits within the configuration register.
+      required: true
+      type: int
