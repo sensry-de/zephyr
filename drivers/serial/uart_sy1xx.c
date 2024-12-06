@@ -11,10 +11,14 @@
 #include <zephyr/sys/printk.h>
 #include <udma.h>
 #include <pad_ctrl.h>
+#include <zephyr/drivers/pinctrl.h>
+
+pinctrl_soc_pin_t test;
 
 struct sy1xx_uart_config {
 	uint32_t base;
 	uint32_t inst;
+	const struct pinctrl_dev_config *pcfg;
 };
 
 typedef struct {
@@ -255,6 +259,11 @@ static int sy1xx_uart_init(const struct device *dev)
 		data->read[i] = 0xb4;
 	}
 
+	int32_t ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
+	if (ret < 0) {
+		return ret;
+	}
+
 	/* UDMA clock enable */
 	sy1xx_udma_enable_clock(SY1XX_UDMA_MODULE_UART, config->inst);
 
@@ -304,11 +313,15 @@ static DEVICE_API(uart, sy1xx_uart_driver_api) = {
 
 };
 
+
 #define SYS1XX_UART_INIT(n)                                                                        \
+                                                                                                   \
+	PINCTRL_DT_INST_DEFINE(n);                                                                 \
                                                                                                    \
 	static const struct sy1xx_uart_config sy1xx_uart_##n##_cfg = {                             \
 		.base = (uint32_t)DT_INST_REG_ADDR(n),                                             \
 		.inst = (uint32_t)DT_INST_PROP(n, instance),                                       \
+		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(n),                                         \
 	};                                                                                         \
                                                                                                    \
 	static struct sy1xx_uart_data __attribute__((section(".udma_access")))                     \
