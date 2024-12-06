@@ -63,6 +63,12 @@
 			ticks_us = <1000>;
 		};
 
+		pinctrl0: pinctrl@2000 {
+			compatible = "sensry,sy1xx-pinctrl";
+			reg = <0x2000>;
+			status = "okay";
+		};
+
 		uart0: uart@1a102000 {
 			compatible = "sensry,sy1xx-uart";
 			reg = <0x1a102000>;
