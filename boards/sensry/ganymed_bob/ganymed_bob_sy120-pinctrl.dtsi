@@ -1,0 +1,18 @@
+/* Copyright (c) 2024 sensry.io */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+
+&pinctrl0 {
+
+	/* UART0 */
+	/omit-if-no-ref/ uart0_tx: uart0_tx {
+		addr = <0x1a104020>;
+		iro = <0>;
+	};
+
+	/omit-if-no-ref/ uart0_rx: uart0_rx {
+		addr = <0x1a104020>;
+		iro = <8>;
+	};
+
+};
