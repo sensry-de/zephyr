@@ -87,5 +87,16 @@
 			status = "okay";
 		};
 
+		peripherals_with_size {
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			pinctrl0: pinctrl@1A104000 {
+				compatible = "sensry,sy1xx-pinctrl";
+				reg = <0x1A104000 0x1000>;
+				status = "okay";
+			};
+
+		};
 	};
 };
