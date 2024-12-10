@@ -1,0 +1,74 @@
+/* Copyright (c) 2024 sensry.io */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+
+&pinctrl0 {
+
+	/* UART0 */
+	/omit-if-no-ref/ uart0_tx: uart0_tx {
+		pinmux = <0x1a104020 0>;
+	};
+
+	/omit-if-no-ref/ uart0_rx: uart0_rx {
+		pinmux = <0x1a104020 8>;
+		input-enable;
+	};
+
+	/* UART1 */
+	/omit-if-no-ref/ uart1_tx: uart1_tx {
+		pinmux = <0x1a104024 0>;
+	};
+
+	/omit-if-no-ref/ uart1_rx: uart1_rx {
+		pinmux = <0x1a104024 8>;
+		input-enable;
+	};
+
+	/omit-if-no-ref/ uart1_cts: uart1_cts {
+		pinmux = <0x1a104024 16>;
+	};
+
+	/omit-if-no-ref/ uart1_rts: uart1_rts {
+		pinmux = <0x1a104024 24>;
+		input-enable;
+		bias-pull-up;
+	};
+
+	/* UART2 */
+	/omit-if-no-ref/ uart2_tx: uart2_tx {
+		pinmux = <0x1a104028 0>;
+	};
+
+	/omit-if-no-ref/ uart2_rx: uart2_rx {
+		pinmux = <0x1a104028 8>;
+		input-enable;
+	};
+
+	/omit-if-no-ref/ uart2_cts: uart2_cts {
+		pinmux = <0x1a104028 16>;
+	};
+
+	/omit-if-no-ref/ uart2_rts: uart2_rts {
+		pinmux = <0x1a104028 24>;
+		input-enable;
+		bias-pull-up;
+	};
+
+};
+
+
+&uart0 {
+	pinctrl-0 = <&uart0_tx &uart0_rx>;
+	pinctrl-names = "default";
+};
+
+&uart1 {
+	pinctrl-0 = <&uart1_tx &uart1_rx &uart1_cts &uart1_rts>;
+	pinctrl-names = "default";
+};
+
+&uart2 {
+	pinctrl-0 = <&uart2_tx &uart2_rx &uart2_cts &uart2_rts>;
+	pinctrl-names = "default";
+};
+
