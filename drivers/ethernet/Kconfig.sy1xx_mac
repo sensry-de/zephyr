@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2024 sensry.io
+
+menuconfig ETH_SY1XX
+	bool "Sensry SY1XX Ethernet driver"
+	default y
+	# depends on NET_BUF_FIXED_DATA_SIZE
+	# depends on DT_HAS_SENSRY_SY1XX_MAC_ENABLED
+	# select NOCACHE_MEMORY if ARCH_HAS_NOCACHE_MEMORY_SUPPORT
+	select MDIO
+	select PINCTRL
+	help
+	  Enable Atmel SAM MCU Family Ethernet driver.
+
