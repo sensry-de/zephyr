@@ -5,7 +5,7 @@ description: Sensry SY1xx SPI
 
 compatible: "sensry,sy1xx-spi"
 
-include: [spi-controller.yaml]
+include: [spi-controller.yaml, pinctrl-device.yaml]
 
 properties:
   reg:
@@ -13,4 +13,7 @@ properties:
 
   instance:
     type: int
+    required: true
+
+  pinctrl-0:
     required: true
