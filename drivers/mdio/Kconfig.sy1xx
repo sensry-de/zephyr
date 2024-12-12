@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2024 sensry.io
+
+config MDIO_SENSRY_SY1XX
+	bool "Sensry SY1XX MDIO driver"
+	depends on ETH_SY1XX
+    select PINCTRL
+	default y
+	help
+	  Enable Sensry SY1xx SOC Family MDIO driver.
