@@ -1,0 +1,16 @@
+description: Sensry SY1XX GPIO PORT node
+
+compatible: "sensry,sy1xx-gpio"
+
+include: [gpio-controller.yaml, base.yaml]
+
+properties:
+  reg:
+    required: true
+
+  "#gpio-cells":
+    const: 2
+
+gpio-cells:
+  - pin
+  - flags
