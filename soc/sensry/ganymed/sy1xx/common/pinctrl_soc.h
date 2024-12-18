@@ -47,7 +47,8 @@ typedef struct {
 			<< SY1XX_PAD_PULL_DOWN_OFFS |                                              \
 		(SY1XX_TRISTATE_ENABLE * DT_PROP(node, bias_high_impedance))                       \
 			<< SY1XX_PAD_TRISTATE_OFFS |                                               \
-		(SY1XX_OUTPUT_ENABLE & (1 - DT_PROP(node, input_enable))) << SY1XX_PAD_DIR_OFFS    \
+		(SY1XX_OUTPUT_ENABLE & (1 - DT_PROP(node, input_enable))) << SY1XX_PAD_DIR_OFFS |                \
+			(0x2 << 2)\
                                                                                                    \
 	)
 
