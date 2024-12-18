@@ -4,6 +4,9 @@
 
 #define DT_DRV_COMPAT sensry_sy1xx_gpio
 
+#include <zephyr/logging/log.h>
+LOG_MODULE_REGISTER(sy1xx_gpio, CONFIG_GPIO_LOG_LEVEL);
+
 #include <errno.h>
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
@@ -48,6 +51,8 @@ static int sy1xx_gpio_driver_init(const struct device *dev)
 int sy1xx_gpio_driver_configure(const struct device *dev, gpio_pin_t pin, gpio_flags_t flags)
 {
 	const struct sy1xx_gpio_config *const cfg = dev->config;
+
+	LOG_DBG("configure gpio %d to %x", pin, flags);
 
 	if (((1 << pin) & cfg->pin_mask) == 0) {
 		return -EINVAL;
