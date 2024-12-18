@@ -13,3 +13,9 @@ properties:
 
   pinctrl-names:
     required: true
+
+  timeout-msec:
+    type: int
+    default: 100
+    description: |
+      Timeout in milliseconds waiting for the mdio ctrl to finish read or write.
