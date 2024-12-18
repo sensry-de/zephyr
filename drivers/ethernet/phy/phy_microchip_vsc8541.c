@@ -16,11 +16,68 @@ LOG_MODULE_REGISTER(microchip_vsc8541, CONFIG_PHY_LOG_LEVEL);
 #include <zephyr/sys/util_macro.h>
 #include <zephyr/drivers/gpio.h>
 
+#define PHY_REG(page, reg) ((page << 8) | (reg << 0))
+
+/* Generic Register */
+#define PHY_REG_PAGE0_BMCR            PHY_REG(0, 0x00)
+#define PHY_REG_PAGE0_BMSR            PHY_REG(0, 0x01)
+#define PHY_REG_PAGE0_ID1             PHY_REG(0, 0x02)
+#define PHY_REG_PAGE0_ID2             PHY_REG(0, 0x03)
+#define PHY_REG_PAGE0_ADV             PHY_REG(0, 0x04)
+#define PHY_REG_LPA                   0x05
+#define PHY_REG_EXP                   0x06
+#define PHY_REG_PAGE0_CTRL1000        PHY_REG(0, 0x09)
+#define PHY_REG_PAGE0_STAT1000        PHY_REG(0, 0x0A)
+#define PHY_REG_MMD_CTRL              0x0D
+#define PHY_REG_MMD_DATA              0x0E
+#define PHY_REG_STAT1000_EXT1         0x0F
+#define PHY_REG_PAGE0_STAT100         PHY_REG(0, 0x10)
+#define PHY_REG_PAGE0_STAT1000_EXT2   PHY_REG(0, 0x11)
+#define PHY_REG_AUX_CTRL              0x12
+#define PHY_REG_PAGE0_ERROR_COUNTER_1 PHY_REG(0, 0x13)
+#define PHY_REG_PAGE0_ERROR_COUNTER_2 PHY_REG(0, 0x14)
+#define PHY_REG_PAGE0_EXT_CTRL_STAT   PHY_REG(0, 0x16)
+#define PHY_REG_PAGE0_EXT_CONTROL_1   PHY_REG(0, 0x17)
+#define PHY_REG_LED_MODE              0x1d
+
+#define PHY_REG_PAGE_SELECTOR 0x1F
+
+#define PHY_REG_PAGE1_EXT_MODE_CTRL PHY_REG(1, 0x13)
+
+#define PHY_REG_PAGE2_RGMII_CONTROL  PHY_REG(2, 0x14)
+#define PHY_REG_PAGE2_MAC_IF_CONTROL PHY_REG(2, 0x1b)
+
+/* phy page selectors */
+#define PHY_PAGE_0 0x00 // main registers space active
+#define PHY_PAGE_1 0x01 // reg 16 - 30 will be redirected to ext. register space 1
+#define PHY_PAGE_2 0x02 // reg 16 - 30 will be redirected to ext. register space 2
+#define PHY_PAGE_3 0x03 // reg 0 - 30 will be redirected to gpio register space
+
+#define BMCR_RESET     (1 << 15)
+#define BMCR_LOOPBACK  (1 << 14)
+#define BMCR_ANENABLE  (1 << 12)
+#define BMCR_ANRESTART (1 << 9)
+#define BMCR_FULLDPLX  (1 << 8)
+#define BMCR_SPEED10   ((0 << 13) | (0 << 6))
+#define BMCR_SPEED100  ((1 << 13) | (0 << 6))
+#define BMCR_SPEED1000 ((0 << 13) | (1 << 6))
+
+#define BMCR_SPEEDMASK ((1 << 13) | (1 << 6))
+
+#define BMSR_LSTATUS (1 << 2)
+
 enum vsc8541_interface {
 	VSC8541_MII,
 	VSC8541_RMII,
-	VSC8541_RMII_25MHZ,
+	VSC8541_GMII,
+	VSC8541_RGMII,
 };
+
+/* Thread stack size */
+#define STACK_SIZE 512
+
+/* Thread priority */
+#define THREAD_PRIORITY 7
 
 struct mc_vsc8541_config {
 	uint8_t addr;
@@ -32,15 +89,8 @@ struct mc_vsc8541_config {
 #if DT_ANY_INST_HAS_PROP_STATUS_OKAY(int_gpios)
 	const struct gpio_dt_spec interrupt_gpio;
 #endif
+	bool confirm_phy_id;
 };
-
-/* Thread stack size */
-#define STACK_SIZE 512
-
-/* Thread priority */
-#define THREAD_PRIORITY 7
-
-static void phy_mc_vsc8541_link_monitor(void *arg1, void *arg2, void *arg3);
 
 struct mc_vsc8541_data {
 	const struct device *dev;
@@ -53,16 +103,210 @@ struct mc_vsc8541_data {
 	uint8_t link_monitor_thread_stack[STACK_SIZE];
 };
 
+static int phy_mc_vsc8541_read(const struct device *dev, uint16_t reg_addr, uint32_t *data);
+static int phy_mc_vsc8541_write(const struct device *dev, uint16_t reg_addr, uint32_t data);
+static void phy_mc_vsc8541_link_monitor(void *arg1, void *arg2, void *arg3);
+
+static int phy_mc_vsc8541_confirm_phy_id(const struct device *dev)
+{
+	uint16_t phy_id_1;
+	uint16_t phy_id_2;
+
+	if (0 != phy_mc_vsc8541_read(dev, PHY_REG_PAGE0_ID1, (uint32_t *)&phy_id_1)) {
+		return -EINVAL;
+	}
+
+	if (0 != phy_mc_vsc8541_read(dev, PHY_REG_PAGE0_ID2, (uint32_t *)&phy_id_2)) {
+		return -EINVAL;
+	}
+
+	if (phy_id_1 == 0x0007) {
+		if (phy_id_2 == 0x0771) {
+			LOG_INF("model vsc8541-01 rev b");
+			return 0;
+		}
+		if (phy_id_2 == 0x0772) {
+			LOG_INF("model vsc8541-02/-05 rev c");
+			return 0;
+		}
+	}
+
+	LOG_INF("phy id is %#.4x - %#.4x", phy_id_1, phy_id_2);
+	return -EINVAL;
+}
+
+static int phy_mc_vsc8541_reset(const struct device *dev)
+{
+
+#if DT_ANY_INST_HAS_PROP_STATUS_OKAY(reset_gpios)
+	const struct mc_vsc8541_config *cfg = dev->config;
+	struct mc_vsc8541_data *data = dev->data;
+
+	if (!cfg->reset_gpio.port) {
+		LOG_WRN("missing port definition");
+		return -EINVAL;
+	}
+
+	/* configure the reset pin */
+	int ret = gpio_pin_configure_dt(&cfg->reset_gpio, GPIO_OUTPUT_ACTIVE);
+	if (ret) {
+		return ret;
+	}
+
+	for (uint32_t i = 0; i < 2; i++) {
+		/* Start reset */
+		ret = gpio_pin_set_dt(&cfg->reset_gpio, 0);
+		if (ret) {
+			LOG_WRN("failed to set reset gpio");
+			return -EINVAL;
+		}
+
+		/* Wait for at least 500 us as specified by datasheet */
+		k_sleep(K_MSEC(200));
+
+		/* Reset over */
+		ret = gpio_pin_set_dt(&cfg->reset_gpio, 1);
+
+		/* After de-asserting reset, must wait at least 100 us to use programming interface
+		 */
+		k_sleep(K_MSEC(200));
+	}
+#endif /* DT_ANY_INST_HAS_PROP_STATUS_OKAY(reset_gpios) */
+
+	/* According to IEEE 802.3, Section 2, Subsection 22.2.4.1.1,
+	 * a PHY reset may take up to 0.5 s.
+	 */
+	k_sleep(K_MSEC(500));
+
+	/* confirm phy if, if enabled via DT */
+	if (cfg->confirm_phy_id) {
+		if (0 != phy_mc_vsc8541_confirm_phy_id(dev)) {
+			LOG_ERR("failed to confirm phy id");
+			return -EINVAL;
+		}
+	}
+
+	/* set RGMII mode (must be executed BEFORE software reset -- see datasheet) */
+	if (cfg->phy_iface == VSC8541_RGMII) {
+		ret = phy_mc_vsc8541_write(dev, PHY_REG_PAGE0_EXT_CONTROL_1,
+					   (0x0 << 13) | (0x2 << 11));
+		if (ret) {
+			return ret;
+		}
+	}
+
+	/* software reset */
+	ret = phy_mc_vsc8541_write(dev, PHY_REG_PAGE0_BMCR, MII_BMCR_RESET);
+	if (ret) {
+		return ret;
+	}
+
+	uint32_t reg = 0;
+	do {
+		ret = phy_mc_vsc8541_read(dev, PHY_REG_PAGE0_BMCR, &reg);
+	} while (reg & BMCR_RESET);
+
+	/* forced MID-X */
+	ret = phy_mc_vsc8541_write(dev, PHY_REG_PAGE1_EXT_MODE_CTRL, (3 << 2));
+	if (ret) {
+		return ret;
+	}
+
+	/* configure the RGMII clk delay */
+	/* this is highly hardware dependant and may vary between pcb designs */
+	reg = 0x0;
+	reg |= (0x5 << 4); // RX_CLK delay
+	reg |= (0x5 << 0); // TX_CLK delay
+	ret = phy_mc_vsc8541_write(dev, PHY_REG_PAGE2_RGMII_CONTROL, reg);
+	if (ret) {
+		return ret;
+	}
+
+	/* we use limited advertising, based on configured speed */
+	/* ... */
+
+	/* 1000MBit/s + AUTO */
+	ret = phy_mc_vsc8541_write(dev, PHY_REG_PAGE0_ADV, (1 << 8) | (1 << 6) | 0x01);
+	if (ret) {
+		return ret;
+	}
+	ret = phy_mc_vsc8541_write(dev, PHY_REG_PAGE0_CTRL1000, (1 << 12) | (1 << 11) | (1 << 9));
+	if (ret) {
+		return ret;
+	}
+
+	/* start auto negotiation */
+	ret = phy_mc_vsc8541_write(dev, PHY_REG_PAGE0_BMCR, BMCR_ANENABLE | BMCR_ANRESTART);
+	if (ret) {
+		return ret;
+	}
+
+	return ret;
+}
+
+static int phy_mc_vsc8541_get_speed(const struct device *dev, struct phy_link_state *state){
+	struct mc_vsc8541_data *data = dev->data;
+	int ret;
+	uint32_t status;
+	uint32_t link10_status;
+	uint32_t link100_status;
+	uint32_t link1000_status;
+
+	ret = phy_mc_vsc8541_read(dev, PHY_REG_PAGE0_BMSR, &status);
+	if (ret) {
+		return ret;
+	}
+	ret = phy_mc_vsc8541_read(dev, PHY_REG_PAGE0_EXT_CTRL_STAT, &link10_status);
+	if (ret) {
+		return ret;
+	}
+	ret = phy_mc_vsc8541_read(dev, PHY_REG_PAGE0_STAT100, &link100_status);
+	if (ret) {
+		return ret;
+	}
+	ret = phy_mc_vsc8541_read(dev, PHY_REG_PAGE0_STAT1000_EXT2, &link1000_status);
+	if (ret) {
+		return ret;
+	}
+
+	if ((status & (1<<2)) == 0){
+		// no link
+		state->speed = LINK_HALF_10BASE_T;
+	}
+
+	if ((status & (1<<5)) == 0){
+		// auto negotiation not yet complete
+		state->speed = LINK_HALF_10BASE_T;
+	}
+
+	if ((link1000_status & (1 << 12))){
+		state->speed = LINK_FULL_1000BASE_T;
+	}
+	if (link100_status & (1 << 12)){
+		state->speed = LINK_FULL_100BASE_T;
+	}
+	if (link10_status & (1 << 6)){
+		state->speed = LINK_FULL_10BASE_T;
+	}
+
+	return 0;
+}
+
 static int phy_mc_vsc8541_init(const struct device *dev)
 {
 	struct mc_vsc8541_data *data = dev->data;
-
-	LOG_INF("initialize");
 
 	data->cb = NULL;
 	data->cb_data = NULL;
 	data->state.is_up = false;
 	data->state.speed = LINK_HALF_10BASE_T;
+
+	/* Reset PHY */
+	int ret = phy_mc_vsc8541_reset(dev);
+	if (ret) {
+		LOG_ERR("initialize failed");
+		return ret;
+	}
 
 	/* setup thread to watch link state */
 	/* \TODO: should be interrupt driven by phy gpio */
@@ -73,11 +317,49 @@ static int phy_mc_vsc8541_init(const struct device *dev)
 
 	k_thread_name_set(&data->link_monitor_thread, "phy-link-mon");
 
+	LOG_INF("initialize done");
+
 	return 0;
 }
 
 static int phy_mc_vsc8541_get_link(const struct device *dev, struct phy_link_state *state)
 {
+	struct mc_vsc8541_data *data = dev->data;
+
+	int ret;
+	uint32_t reg_sr;
+	uint32_t reg_cr;
+
+	ret = phy_mc_vsc8541_read(dev, PHY_REG_PAGE0_BMSR, &reg_sr);
+	if (ret) {
+		return ret;
+	}
+	ret = phy_mc_vsc8541_read(dev, PHY_REG_PAGE0_BMCR, &reg_cr);
+	if (ret) {
+		return ret;
+	}
+
+	uint32_t hasLink = reg_sr & (1 << 2) ? 1 : 0;
+
+	uint32_t auto_negotation_finished;
+	if (reg_cr & (BMCR_ANENABLE)) {
+		// auto negotiation active; update status
+		auto_negotation_finished = reg_sr & (1 << 5) ? 1 : 0;
+	} else {
+		auto_negotation_finished = 1;
+	}
+
+	if (hasLink & auto_negotation_finished) {
+		state->is_up = 1;
+		ret = phy_mc_vsc8541_get_speed(dev, state);
+		if (ret){
+			return ret;
+		}
+	} else {
+		state->is_up = 0;
+		state->speed = LINK_HALF_10BASE_T;
+	}
+
 	LOG_INF("get link status: %d", state->is_up);
 	return 0;
 }
@@ -105,32 +387,69 @@ void phy_mc_vsc8541_link_monitor(void *arg1, void *arg2, void *arg3)
 	const struct device *dev = arg1;
 	struct mc_vsc8541_data *data = dev->data;
 
+	struct phy_link_state new_state;
+
 	while (1) {
 		k_sleep(K_MSEC(5000));
+		phy_mc_vsc8541_get_link(dev, &new_state);
 
-		data->state.is_up = true;
-		if (data->cb) {
-			data->cb(dev, &data->state, data->cb_data);
-		}
+		if ((new_state.is_up != data->state.is_up) || (new_state.speed != data->state.speed)){
+			/* state changed */
+			data->state.is_up = new_state.is_up;
+			data->state.speed = new_state.speed;
 
-		k_sleep(K_MSEC(60000));
-
-		data->state.is_up = false;
-		if (data->cb) {
-			data->cb(dev, &data->state, data->cb_data);
+			if (data->cb) {
+				/* announce new state */
+				data->cb(dev, &data->state, data->cb_data);
+			}
 		}
 	}
 }
 
 static int phy_mc_vsc8541_read(const struct device *dev, uint16_t reg_addr, uint32_t *data)
 {
-	LOG_INF("read");
+	const struct mc_vsc8541_config *cfg = dev->config;
+	int ret;
+
+	/* Make sure excessive bits 16-31 are reset */
+	*data = 0U;
+	uint32_t page = reg_addr >> 8;
+	reg_addr &= 0x00ff;
+
+	/* select page, given by register upper byte */
+	ret = mdio_write(cfg->mdio_dev, cfg->addr, PHY_REG_PAGE_SELECTOR, (uint16_t)page);
+	if (ret) {
+		return ret;
+	}
+
+	/* select register, given by register lower byte */
+	ret = mdio_read(cfg->mdio_dev, cfg->addr, reg_addr, (uint16_t *)data);
+	if (ret) {
+		return ret;
+	}
+
 	return 0;
 }
 
 static int phy_mc_vsc8541_write(const struct device *dev, uint16_t reg_addr, uint32_t data)
 {
-	LOG_INF("write");
+	const struct mc_vsc8541_config *cfg = dev->config;
+	int ret;
+	uint32_t page = reg_addr >> 8;
+	reg_addr &= 0x00ff;
+
+	/* select page, given by register upper byte */
+	ret = mdio_write(cfg->mdio_dev, cfg->addr, PHY_REG_PAGE_SELECTOR, (uint16_t)page);
+	if (ret) {
+		return ret;
+	}
+
+	/* write register, given by lower byte */
+	ret = mdio_write(cfg->mdio_dev, cfg->addr, reg_addr, (uint16_t)data);
+	if (ret) {
+		return ret;
+	}
+
 	return 0;
 }
 
@@ -159,6 +478,7 @@ static DEVICE_API(ethphy, mc_vsc8541_phy_api) = {
 		.addr = DT_INST_REG_ADDR(n),                                                       \
 		.mdio_dev = DEVICE_DT_GET(DT_INST_PARENT(n)),                                      \
 		.phy_iface = DT_INST_ENUM_IDX(n, microchip_interface_type),                        \
+		.confirm_phy_id = DT_INST_PROP(n, confirm_phy_id),                                 \
 		RESET_GPIO(n) INTERRUPT_GPIO(n)};                                                  \
                                                                                                    \
 	static struct mc_vsc8541_data mc_vsc8541_##n##_data;                                       \

@@ -19,6 +19,11 @@ properties:
     type: phandle-array
     description: GPIO connected to MAC PHY reset signal pin. Reset is active low.
 
+  confirm-phy-id:
+    type: boolean
+    description: |
+      Read manufacturer id to confirm that chip is really VSC85xx.
+
   microchip,interface-type:
     type: string
     required: true
@@ -26,4 +31,5 @@ properties:
     enum:
       - "mii"
       - "rmii"
-      - "rmii-25MHz"
+      - "gmii"
+      - "rgmii"
