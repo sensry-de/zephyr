@@ -15,6 +15,18 @@ LOG_MODULE_REGISTER(sy1xx_mac, CONFIG_ETHERNET_LOG_LEVEL);
 #include <ethernet/eth_stats.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/net/phy.h>
+#include <udma.h>
+
+/* MAC register offsets */
+#define SY1XX_MAC_VERSION_REG      0x0000
+#define SY1XX_MAC_ADDRESS_LOW_REG  0x0004
+#define SY1XX_MAC_ADDRESS_HIGH_REG 0x0008
+#define SY1XX_MAC_CTRL_REG         0x000c
+
+/* MAC control register bit offsets */
+#define SY1XX_MAC_CTRL_GMII_OFFS    (3)
+#define SY1XX_MAC_CTRL_CLK_DIV_OFFS (8)
+#define SY1XX_MAC_CTRL_CLK_SEL_OFFS (10)
 
 #define MAX_MAC_PACKET_LEN 1600
 
@@ -29,6 +41,12 @@ struct sy1xx_mac_dev_config {
 	const struct device *phy_dev;
 	const struct pinctrl_dev_config *pcfg;
 	uint32_t base_addr;
+	uint32_t udma_base;
+};
+
+struct dma_buffers {
+	uint8_t tx[MAX_MAC_PACKET_LEN];
+	uint8_t rx[MAX_MAC_PACKET_LEN];
 };
 
 struct sy1xx_mac_dev_data {
@@ -38,11 +56,15 @@ struct sy1xx_mac_dev_data {
 
 	bool link_up;
 
-	uint8_t tx_buffer[MAX_MAC_PACKET_LEN];
-	uint16_t tx_buffer_len;
+	bool promiscuous_mode;
 
-	uint8_t rx_buffer[MAX_MAC_PACKET_LEN];
-	uint16_t rx_buffer_len;
+	uint8_t tx[MAX_MAC_PACKET_LEN];
+	uint16_t tx_len;
+
+	uint8_t rx[MAX_MAC_PACKET_LEN];
+	uint16_t rx_len;
+
+	struct dma_buffers *dma_buffers;
 
 	struct k_thread rx_data_thread;
 	uint8_t rx_data_thread_stack[STACK_SIZE];
@@ -59,10 +81,20 @@ static int sy1xx_mac_initialize(const struct device *dev)
 	}
 
 	data->link_up = false;
+	data->promiscuous_mode = false;
+	cfg->udma_base = 0x1A102a00;
 
 	for (uint32_t i = 0; i < 6; i++) {
 		data->mac[i] = 0x02 * (i + 1);
 	}
+
+	data->mac[0] = 0xb0;
+	data->mac[1] = 0x25;
+	data->mac[2] = 0xaa;
+	data->mac[3] = 0x4e;
+	data->mac[4] = 0xd5;
+	data->mac[5] = 0x5a;
+
 
 	/* create the receiver thread in stopped mode; start with device start request */
 	k_thread_create(&data->rx_data_thread, (k_thread_stack_t *)data->rx_data_thread_stack,
@@ -77,7 +109,43 @@ static int sy1xx_mac_initialize(const struct device *dev)
 
 static int sy1xx_mac_start(const struct device *dev)
 {
+	struct sy1xx_mac_dev_config *cfg = (struct sy1xx_mac_dev_config *)dev->config;
 	struct sy1xx_mac_dev_data *data = (struct sy1xx_mac_dev_data *)dev->data;
+
+
+	extern void sy1xx_udma_disable_clock(sy1xx_udma_module_t module, uint32_t instance);
+	/* UDMA clock enable */
+	sy1xx_udma_enable_clock(SY1XX_UDMA_MODULE_MAC, 0);
+	sy1xx_udma_disable_clock(SY1XX_UDMA_MODULE_MAC, 0);
+	sy1xx_udma_enable_clock(SY1XX_UDMA_MODULE_MAC, 0);
+
+	/* reset mac */
+	sys_write32(0x0001, cfg->base_addr + SY1XX_MAC_CTRL_REG);
+	sys_write32(0x0000, cfg->base_addr + SY1XX_MAC_CTRL_REG);
+
+	/* update mac in controller */
+	uint32_t v0 = sys_read32(cfg->base_addr + SY1XX_MAC_ADDRESS_LOW_REG);
+	uint32_t v1 = sys_read32(cfg->base_addr + SY1XX_MAC_ADDRESS_HIGH_REG);
+
+	/* mask out relevant fields, leave lower bits */
+	v0 &= 0x00000000;
+	v1 &= 0x0000ffff;
+
+	v0 = (data->mac[0] << 0) | (data->mac[1] << 8) | (data->mac[2] << 16) |
+	     (data->mac[3] << 24);
+	v1 = (data->mac[4] << 0) | (data->mac[5] << 8);
+
+	sys_write32(v0, cfg->base_addr + SY1XX_MAC_ADDRESS_LOW_REG);
+	sys_write32(v1, cfg->base_addr + SY1XX_MAC_ADDRESS_HIGH_REG);
+
+	/* set promiscuous mode */
+	uint32_t prom = sys_read32(cfg->base_addr + SY1XX_MAC_ADDRESS_HIGH_REG);
+	if (data->promiscuous_mode) {
+		prom &= ~(1 << 16);
+	} else {
+		prom |= (1 << 16);
+	}
+	sys_write32(prom, cfg->base_addr + SY1XX_MAC_ADDRESS_HIGH_REG);
 
 	k_thread_resume(&data->rx_data_thread);
 	LOG_INF("started device");
@@ -102,8 +170,10 @@ static void phy_link_state_changed(const struct device *pdev, struct phy_link_st
 	struct sy1xx_mac_dev_data *const data = dev->data;
 	const struct sy1xx_mac_dev_config *const cfg = dev->config;
 	bool is_up;
+	enum phy_link_speed speed;
 
 	is_up = state->is_up;
+	speed = state->speed;
 
 	if (is_up && !data->link_up) {
 		LOG_INF("Link up");
@@ -113,10 +183,50 @@ static void phy_link_state_changed(const struct device *pdev, struct phy_link_st
 		net_eth_carrier_on(cfg->iface);
 
 		/* configure mac, based on provided link information 1Gbs/100MBit/... */
-		/* ... */
+		uint32_t v = sys_read32(cfg->base_addr + SY1XX_MAC_CTRL_REG);
+		enum {
+			GMII = 3,
+			CLK_DIV = 8,
+			CLK_SEL = 10
+		};
+		v &= ~((1 << SY1XX_MAC_CTRL_GMII_OFFS) | (1 << SY1XX_MAC_CTRL_CLK_SEL_OFFS) |
+		       (3 << SY1XX_MAC_CTRL_CLK_DIV_OFFS));
+
+		switch (speed) {
+		case LINK_FULL_10BASE_T:
+			LOG_INF("link speed FULL_10BASE_T");
+			v |= (0 << GMII) | (1 << CLK_SEL) |
+			     (2 << CLK_DIV); // 2.5MHz, MAC is clock source
+			break;
+		case LINK_FULL_100BASE_T:
+			LOG_INF("link speed FULL_100BASE_T");
+			v |= (0 << GMII) | (1 << CLK_SEL) |
+			     (0 << CLK_DIV); // 25MHz, MAC is clock source
+			break;
+		case LINK_FULL_1000BASE_T:
+			LOG_INF("link speed FULL_1000BASE_T");
+			v |= (1 << GMII) | (0 << CLK_SEL) |
+			     (0 << CLK_DIV); // 125MHz, Phy is clock source
+			break;
+		default:
+			LOG_WRN("invalid speed link speed");
+			return;
+		}
+
+		sys_write32(v, cfg->base_addr + SY1XX_MAC_CTRL_REG);
+
+		/* enable mac controller */
+		uint32_t en = sys_read32(cfg->base_addr + SY1XX_MAC_CTRL_REG);
+		en |= (3 << 1);
+		sys_write32(en, cfg->base_addr + SY1XX_MAC_CTRL_REG);
 
 	} else if (!is_up && data->link_up) {
 		LOG_INF("Link down");
+
+		/* disable mac controller */
+		uint32_t en = sys_read32(cfg->base_addr + SY1XX_MAC_CTRL_REG);
+		en &= ~(3 << 1);
+		sys_write32(en, cfg->base_addr + SY1XX_MAC_CTRL_REG);
 
 		/* Announce link down status */
 		data->link_up = false;
@@ -201,11 +311,91 @@ static const struct device *sy1xx_mac_get_phy(const struct device *dev)
 	return cfg->phy_dev;
 }
 
-static int sy1xx_mac_send(const struct device *dev, struct net_pkt *pkt)
+/*
+ * \return: < 0 ... error
+ * 			= 0 ok
+ * 			> 0 ... busy
+ */
+
+static int sy1xx_mac_low_level_send(const struct device *dev, uint8_t *tx, uint32_t len)
 {
-	LOG_INF("send %d", pkt->buffer->len);
+	struct sy1xx_mac_dev_config *cfg = (struct sy1xx_mac_dev_config *)dev->config;
+	struct sy1xx_mac_dev_data *const data = dev->data;
+
+	LOG_INF("send %d", len);
+
+	if (len == 0) {
+		return -2;
+	}
+
+	if (len > MAX_MAC_PACKET_LEN) {
+		return -3;
+	}
+
+	int32_t is_finished = SY1XX_UDMA_IS_FINISHED_TX(cfg->udma_base);
+	if (!is_finished) {
+		return 1;
+	}
+
+	// udma is ready, double check if last transmission was successful
+	uint32_t remain = SY1XX_UDMA_GET_REMAINING_TX(cfg->udma_base);
+	if (remain != 0) {
+		SY1XX_UDMA_CANCEL_TX(cfg->udma_base);
+		printf("tx - last transmission failed\n");
+		return -4;
+	}
+
+	// stop any prior transmission
+	// UDMA_WAIT_FOR_FINISHED_TX(ETH_BASE(inst));
+
+	/* copy data to dma buffer */
+	for (uint32_t i = 0; i < len; i++) {
+		data->dma_buffers->tx[i] = tx[i];
+	}
+
+	// start a new transmission
+	SY1XX_UDMA_START_TX(cfg->udma_base, (uint32_t)data->dma_buffers->tx, len, 0);
 
 	return 0;
+}
+
+static int sy1xx_mac_send(const struct device *dev, struct net_pkt *pkt)
+{
+	struct sy1xx_mac_dev_config *cfg = (struct sy1xx_mac_dev_config *)dev->config;
+	struct sy1xx_mac_dev_data *const data = dev->data;
+
+	LOG_DBG("ganymed mac send %d", pkt->buffer->len);
+
+	volatile struct net_buf *frag = pkt->buffer;
+
+	/* push all fragments of the packet into one linear buffer */
+	data->tx_len = 0;
+	do {
+
+		// copy fragments to buffer
+		for (uint32_t i = 0; i < frag->len; i++) {
+			if (data->tx_len < MAX_MAC_PACKET_LEN) {
+				data->tx[data->tx_len++] = frag->data[i];
+			} else {
+				LOG_ERR("tx buffer overflow");
+				return -1;
+			}
+		}
+
+		frag = frag->frags;
+	} while (frag);
+
+	int ret = sy1xx_mac_low_level_send(dev, data->tx, data->tx_len);
+	if (ret == 0) {
+		return 0;
+	}
+	if (ret > 0){
+		LOG_ERR("tx busy");
+		return -2;
+	}
+
+	LOG_ERR("tx error");
+	return ret;
 }
 
 int32_t sy1xx_mac_receive_data(uint8_t *data, uint16_t len)
@@ -266,7 +456,12 @@ const struct ethernet_api sy1xx_mac_driver_api = {
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(n),                                         \
 		.phy_dev = DEVICE_DT_GET(DT_INST_PHANDLE(0, phy_handle))};                         \
                                                                                                    \
-	static struct sy1xx_mac_dev_data sy1xx_mac_dev_data##n;                                    \
+	static struct dma_buffers __attribute__((section(".udma_access")))                         \
+	__aligned(4) dma_buffers_##n;                                                              \
+                                                                                                   \
+	static struct sy1xx_mac_dev_data sy1xx_mac_dev_data##n = {                                 \
+		.dma_buffers = &dma_buffers_##n,                                                    \
+	};                                                                                         \
                                                                                                    \
 	ETH_NET_DEVICE_DT_INST_DEFINE(n, &sy1xx_mac_initialize, NULL, &sy1xx_mac_dev_data##n,      \
 				      &sy1xx_mac_dev_config_##n, CONFIG_ETH_INIT_PRIORITY,         \
