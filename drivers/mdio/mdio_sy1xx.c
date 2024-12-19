@@ -133,7 +133,7 @@ static int sy1xx_mdio_read(const struct device *dev, uint8_t prtad, uint8_t rega
 	/* get the data from the read result register */
 	*data = sys_read32(cfg->base_addr + SY1XX_MDIO_READ_DATA_REG);
 
-	LOG_INF("read phy: %d, reg: %#.2x, value: %#.2x", prtad, regad, *data);
+	LOG_DBG("read phy: %d, reg: %#.2x, value: %#.2x", prtad, regad, *data);
 
 	return 0;
 }
@@ -161,7 +161,7 @@ static int sy1xx_mdio_write(const struct device *dev, uint8_t prtad, uint8_t reg
 		return -ETIMEDOUT;
 	}
 
-	LOG_INF("write phy: %d, reg: %d, value: %d", prtad, regad, data);
+	LOG_DBG("write phy: %d, reg: %d, value: %d", prtad, regad, data);
 
 	return 0;
 }
