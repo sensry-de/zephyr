@@ -88,13 +88,12 @@ static int sy1xx_mac_initialize(const struct device *dev)
 		data->mac[i] = 0x02 * (i + 1);
 	}
 
-	data->mac[0] = 0xb0;
+	data->mac[0] = 0xb2;
 	data->mac[1] = 0x25;
 	data->mac[2] = 0xaa;
 	data->mac[3] = 0x4e;
 	data->mac[4] = 0xd5;
 	data->mac[5] = 0x5a;
-
 
 	/* create the receiver thread in stopped mode; start with device start request */
 	k_thread_create(&data->rx_data_thread, (k_thread_stack_t *)data->rx_data_thread_stack,
@@ -112,8 +111,8 @@ static int sy1xx_mac_start(const struct device *dev)
 	struct sy1xx_mac_dev_config *cfg = (struct sy1xx_mac_dev_config *)dev->config;
 	struct sy1xx_mac_dev_data *data = (struct sy1xx_mac_dev_data *)dev->data;
 
-
 	extern void sy1xx_udma_disable_clock(sy1xx_udma_module_t module, uint32_t instance);
+
 	/* UDMA clock enable */
 	sy1xx_udma_enable_clock(SY1XX_UDMA_MODULE_MAC, 0);
 	sy1xx_udma_disable_clock(SY1XX_UDMA_MODULE_MAC, 0);
@@ -266,9 +265,12 @@ static void sy1xx_mac_iface_init(struct net_if *iface)
 
 static enum ethernet_hw_caps sy1xx_mac_get_caps(const struct device *dev)
 {
-	LOG_DBG("ganymed mac get_caps");
+	enum ethernet_hw_caps supported = 0;
 
-	return ETHERNET_LINK_1000BASE_T;
+	supported |= ETHERNET_PROMISC_MODE;
+	supported |= ETHERNET_LINK_1000BASE_T;
+
+	return supported;
 }
 
 static int sy1xx_mac_get_config(const struct device *dev, enum ethernet_config_type type,
@@ -288,7 +290,7 @@ static int sy1xx_mac_get_config(const struct device *dev, enum ethernet_config_t
 static int sy1xx_mac_set_config(const struct device *dev, enum ethernet_config_type type,
 				const struct ethernet_config *config)
 {
-	LOG_INF("ganymed mac set config");
+	LOG_INF("set config");
 	switch (type) {
 	case ETHERNET_CONFIG_TYPE_MAC_ADDRESS:
 		LOG_DBG("setting mac address");
@@ -312,12 +314,22 @@ static const struct device *sy1xx_mac_get_phy(const struct device *dev)
 }
 
 /*
- * \return: < 0 ... error
- * 			= 0 ok
- * 			> 0 ... busy
+ * rx ready status of eth is different to any other rx udma,
+ * so we implement here
  */
+int32_t sy1xx_mac_udma_is_finished_rx(uint32_t base)
+{
+	uint32_t isBusy = SY1XX_UDMA_READ_REG(base, SY1XX_UDMA_CFG_REG + 0x00) & ((1 << 17));
+	return isBusy ? 0 : 1;
+}
 
-static int sy1xx_mac_low_level_send(const struct device *dev, uint8_t *tx, uint32_t len)
+/**
+ * @return
+ *  - < 0: Error
+ *  -   0: OK
+ *  - > 0: Busy
+ */
+static int sy1xx_mac_low_level_send(const struct device *dev, uint8_t *tx, uint16_t len)
 {
 	struct sy1xx_mac_dev_config *cfg = (struct sy1xx_mac_dev_config *)dev->config;
 	struct sy1xx_mac_dev_data *const data = dev->data;
@@ -325,16 +337,16 @@ static int sy1xx_mac_low_level_send(const struct device *dev, uint8_t *tx, uint3
 	LOG_INF("send %d", len);
 
 	if (len == 0) {
-		return -2;
+		return -EINVAL;
 	}
 
 	if (len > MAX_MAC_PACKET_LEN) {
-		return -3;
+		return -EINVAL;
 	}
 
 	int32_t is_finished = SY1XX_UDMA_IS_FINISHED_TX(cfg->udma_base);
 	if (!is_finished) {
-		return 1;
+		return EBUSY;
 	}
 
 	// udma is ready, double check if last transmission was successful
@@ -342,7 +354,7 @@ static int sy1xx_mac_low_level_send(const struct device *dev, uint8_t *tx, uint3
 	if (remain != 0) {
 		SY1XX_UDMA_CANCEL_TX(cfg->udma_base);
 		printf("tx - last transmission failed\n");
-		return -4;
+		return -EINVAL;
 	}
 
 	// stop any prior transmission
@@ -353,8 +365,62 @@ static int sy1xx_mac_low_level_send(const struct device *dev, uint8_t *tx, uint3
 		data->dma_buffers->tx[i] = tx[i];
 	}
 
-	// start a new transmission
+	// start dma transfer
 	SY1XX_UDMA_START_TX(cfg->udma_base, (uint32_t)data->dma_buffers->tx, len, 0);
+
+	return 0;
+}
+
+static int sy1xx_mac_low_level_receive(const struct device *dev, uint8_t *rx, uint16_t *len)
+{
+	struct sy1xx_mac_dev_config *cfg = (struct sy1xx_mac_dev_config *)dev->config;
+	struct sy1xx_mac_dev_data *const dev_data = dev->data;
+
+	*len = 0;
+
+	/* rx udma still busy */
+	if (0 == sy1xx_mac_udma_is_finished_rx(cfg->udma_base)) {
+		return EBUSY;
+	}
+
+	/* rx udma is ready */
+	uint32_t bytes_transferred =
+		SY1XX_UDMA_READ_REG(cfg->udma_base, SY1XX_UDMA_CFG_REG) & 0x0000ffff;
+	if (bytes_transferred > 0) {
+		if (bytes_transferred > 9) {
+			// remove header
+			bytes_transferred -= 9;
+		}
+
+		if (bytes_transferred >= 12) {
+			// copy data
+			for (uint32_t i = 0; i < bytes_transferred; i++) {
+				rx[i] = dev_data->dma_buffers->rx[i];
+			}
+
+			*len = bytes_transferred;
+		}
+	}
+
+	// stop any prior transmission
+	// drivers_eth_wait_for_finished_rx(ETH_BASE(inst));
+
+	// start new transmission
+	SY1XX_UDMA_START_RX(cfg->udma_base, (uint32_t)dev_data->dma_buffers->rx, MAX_MAC_PACKET_LEN,
+			    0);
+
+	/*
+	drivers_eth_wait_for_finished_rx(ETH_BASE(inst));
+
+	volatile uint32_t cfg = UDMA_READ_REG(ETH_BASE(inst), UDMA_CFG_REG);
+
+	UDMA_WRITE_REG(ETH_BASE(inst), UDMA_CFG_REG, ((1 << 18) | (1<<17)));
+
+	if ((cfg & 0xffff0000) > 0){
+		// timeout
+		return -4;
+	}
+	*/
 
 	return 0;
 }
@@ -364,7 +430,7 @@ static int sy1xx_mac_send(const struct device *dev, struct net_pkt *pkt)
 	struct sy1xx_mac_dev_config *cfg = (struct sy1xx_mac_dev_config *)dev->config;
 	struct sy1xx_mac_dev_data *const data = dev->data;
 
-	LOG_DBG("ganymed mac send %d", pkt->buffer->len);
+	LOG_INF("mac send %d", pkt->buffer->len);
 
 	volatile struct net_buf *frag = pkt->buffer;
 
@@ -389,7 +455,7 @@ static int sy1xx_mac_send(const struct device *dev, struct net_pkt *pkt)
 	if (ret == 0) {
 		return 0;
 	}
-	if (ret > 0){
+	if (ret > 0) {
 		LOG_ERR("tx busy");
 		return -2;
 	}
@@ -398,41 +464,61 @@ static int sy1xx_mac_send(const struct device *dev, struct net_pkt *pkt)
 	return ret;
 }
 
-int32_t sy1xx_mac_receive_data(uint8_t *data, uint16_t len)
+int32_t sy1xx_mac_receive_data(const struct device *dev, uint8_t *rx, uint16_t len)
 {
-	/*
-		struct net_pkt *rx_pkt; // = net_pkt_rx_alloc_on_iface(ganymed_instance.iface,
-	   K_NO_WAIT); rx_pkt = net_pkt_alloc_with_buffer(ganymed_instance.iface, len, AF_UNSPEC, 0,
-	   K_NO_WAIT); if (rx_pkt == NULL) { LOG_ERR("rx packet allocation failed"); return -1;
-		}
+	struct sy1xx_mac_dev_config *cfg = (struct sy1xx_mac_dev_config *)dev->config;
 
-		// Add data to the net_pkt
-		if (net_pkt_write(rx_pkt, data, len)) {
-			LOG_ERR("Failed to write data to net_pkt");
-			net_pkt_unref(rx_pkt);
-			return -2;
-		}
+	struct net_pkt *rx_pkt; // = net_pkt_rx_alloc_on_iface(ganymed_instance.iface, K_NO_WAIT);
 
-		volatile int32_t ret = net_recv_data(ganymed_instance.iface, rx_pkt);
-		if (0 != ret) {
-			LOG_ERR("rx packet registration failed");
-			// net_pkt_unref(rx_pkt);
-			return -2;
-		}
-	*/
+	rx_pkt = net_pkt_alloc_with_buffer(cfg->iface, len, AF_UNSPEC, 0, K_NO_WAIT);
+	if (rx_pkt == NULL) {
+		LOG_ERR("rx packet allocation failed");
+		return -1;
+	}
+
+	// Add data to the net_pkt
+	if (net_pkt_write(rx_pkt, rx, len)) {
+		LOG_ERR("Failed to write data to net_pkt");
+		net_pkt_unref(rx_pkt);
+		return -2;
+	}
+
+	volatile int32_t ret = net_recv_data(cfg->iface, rx_pkt);
+	if (0 != ret) {
+		LOG_ERR("rx packet registration failed");
+		// net_pkt_unref(rx_pkt);
+		return -EINVAL;
+	}
+
 	return 0;
 }
 
 void sy1xx_mac_rx_thread_entry(void *p1, void *p2, void *p3)
 {
-
 	LOG_INF("rx thread started");
 
-	while (1) {
+	const struct device *dev = p1;
+	struct sy1xx_mac_dev_config *cfg = (struct sy1xx_mac_dev_config *)dev->config;
+	struct sy1xx_mac_dev_data *const data = dev->data;
 
-		k_sleep(K_MSEC(1000));
-		// ret = sbi_eth_read(DRIVERS_ETH0, ganymed_instance.rx_buffer, MAX_MAC_PACKET_LEN,
-		// &ganymed_instance.rx_buffer_len);
+	while (1) {
+		int ret = sy1xx_mac_low_level_receive(dev, data->rx, &data->rx_len);
+
+		if (ret == 0) {
+			/* register a new received frame */
+			if (data->rx_len > 0){
+				sy1xx_mac_receive_data(dev, data->rx, data->rx_len);
+			}
+			k_yield();
+		} else if (ret < 0) {
+			/* an error happend */
+
+			LOG_ERR("rx error");
+			k_sleep(K_MSEC(1000));
+		} else {
+			/* busy */
+			k_sleep(K_MSEC(1));
+		}
 	}
 }
 
@@ -460,7 +546,7 @@ const struct ethernet_api sy1xx_mac_driver_api = {
 	__aligned(4) dma_buffers_##n;                                                              \
                                                                                                    \
 	static struct sy1xx_mac_dev_data sy1xx_mac_dev_data##n = {                                 \
-		.dma_buffers = &dma_buffers_##n,                                                    \
+		.dma_buffers = &dma_buffers_##n,                                                   \
 	};                                                                                         \
                                                                                                    \
 	ETH_NET_DEVICE_DT_INST_DEFINE(n, &sy1xx_mac_initialize, NULL, &sy1xx_mac_dev_data##n,      \
