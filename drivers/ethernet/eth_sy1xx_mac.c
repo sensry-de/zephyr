@@ -51,6 +51,7 @@ struct dma_buffers {
 
 struct sy1xx_mac_dev_data {
 	struct k_sem sem;
+	struct k_mutex mutex;
 
 	uint8_t mac[6];
 
@@ -83,6 +84,8 @@ static int sy1xx_mac_initialize(const struct device *dev)
 	data->link_up = false;
 	data->promiscuous_mode = false;
 	cfg->udma_base = 0x1A102a00;
+
+	k_mutex_init(&data->mutex);
 
 	for (uint32_t i = 0; i < 6; i++) {
 		data->mac[i] = 0x02 * (i + 1);
@@ -334,8 +337,6 @@ static int sy1xx_mac_low_level_send(const struct device *dev, uint8_t *tx, uint1
 	struct sy1xx_mac_dev_config *cfg = (struct sy1xx_mac_dev_config *)dev->config;
 	struct sy1xx_mac_dev_data *const data = dev->data;
 
-	LOG_INF("send %d", len);
-
 	if (len == 0) {
 		return -EINVAL;
 	}
@@ -430,7 +431,8 @@ static int sy1xx_mac_send(const struct device *dev, struct net_pkt *pkt)
 	struct sy1xx_mac_dev_config *cfg = (struct sy1xx_mac_dev_config *)dev->config;
 	struct sy1xx_mac_dev_data *const data = dev->data;
 
-	LOG_INF("mac send %d", pkt->buffer->len);
+	k_mutex_lock(&data->mutex, K_FOREVER);
+	// printk("mac send %d", pkt->buffer->len);
 
 	volatile struct net_buf *frag = pkt->buffer;
 
@@ -444,6 +446,7 @@ static int sy1xx_mac_send(const struct device *dev, struct net_pkt *pkt)
 				data->tx[data->tx_len++] = frag->data[i];
 			} else {
 				LOG_ERR("tx buffer overflow");
+				k_mutex_unlock(&data->mutex);
 				return -1;
 			}
 		}
@@ -451,16 +454,18 @@ static int sy1xx_mac_send(const struct device *dev, struct net_pkt *pkt)
 		frag = frag->frags;
 	} while (frag);
 
-	int ret = sy1xx_mac_low_level_send(dev, data->tx, data->tx_len);
-	if (ret == 0) {
-		return 0;
-	}
-	if (ret > 0) {
-		LOG_ERR("tx busy");
-		return -2;
-	}
+	volatile int ret = 0;
+	do {
+		ret = sy1xx_mac_low_level_send(dev, data->tx, data->tx_len);
+		if (ret < 0) {
+			LOG_ERR("tx error");
+			k_mutex_unlock(&data->mutex);
+			return ret;
+		}
+		k_sleep(K_MSEC(10));
+	} while (ret > 0);
 
-	LOG_ERR("tx error");
+	k_mutex_unlock(&data->mutex);
 	return ret;
 }
 
@@ -470,7 +475,7 @@ int32_t sy1xx_mac_receive_data(const struct device *dev, uint8_t *rx, uint16_t l
 
 	struct net_pkt *rx_pkt; // = net_pkt_rx_alloc_on_iface(ganymed_instance.iface, K_NO_WAIT);
 
-	rx_pkt = net_pkt_alloc_with_buffer(cfg->iface, len, AF_UNSPEC, 0, K_NO_WAIT);
+	rx_pkt = net_pkt_alloc_with_buffer(cfg->iface, len, AF_UNSPEC, 0, K_FOREVER);
 	if (rx_pkt == NULL) {
 		LOG_ERR("rx packet allocation failed");
 		return -1;
@@ -495,7 +500,7 @@ int32_t sy1xx_mac_receive_data(const struct device *dev, uint8_t *rx, uint16_t l
 
 void sy1xx_mac_rx_thread_entry(void *p1, void *p2, void *p3)
 {
-	LOG_INF("rx thread started");
+	//LOG_INF("rx thread started");
 
 	const struct device *dev = p1;
 	struct sy1xx_mac_dev_config *cfg = (struct sy1xx_mac_dev_config *)dev->config;
@@ -506,7 +511,8 @@ void sy1xx_mac_rx_thread_entry(void *p1, void *p2, void *p3)
 
 		if (ret == 0) {
 			/* register a new received frame */
-			if (data->rx_len > 0){
+			if (data->rx_len > 0) {
+				//LOG_INF("rx %d", data->rx_len);
 				sy1xx_mac_receive_data(dev, data->rx, data->rx_len);
 			}
 			k_yield();
@@ -517,7 +523,7 @@ void sy1xx_mac_rx_thread_entry(void *p1, void *p2, void *p3)
 			k_sleep(K_MSEC(1000));
 		} else {
 			/* busy */
-			k_sleep(K_MSEC(1));
+			k_sleep(K_MSEC(10));
 		}
 	}
 }
