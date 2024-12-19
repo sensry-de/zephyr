@@ -16,43 +16,45 @@ LOG_MODULE_REGISTER(microchip_vsc8541, CONFIG_PHY_LOG_LEVEL);
 #include <zephyr/sys/util_macro.h>
 #include <zephyr/drivers/gpio.h>
 
+/* phy page selectors */
+#define PHY_PAGE_0 0x00 /* main registers space active */
+#define PHY_PAGE_1 0x01 /* reg 16 - 30 will be redirected to ext. register space 1 */
+#define PHY_PAGE_2 0x02 /* reg 16 - 30 will be redirected to ext. register space 2 */
+#define PHY_PAGE_3 0x03 /* reg 0 - 30 will be redirected to gpio register space */
+
+/* virtual register, treat higher byte as page selector and lower byte is register */
 #define PHY_REG(page, reg) ((page << 8) | (reg << 0))
 
 /* Generic Register */
-#define PHY_REG_PAGE0_BMCR            PHY_REG(0, 0x00)
-#define PHY_REG_PAGE0_BMSR            PHY_REG(0, 0x01)
-#define PHY_REG_PAGE0_ID1             PHY_REG(0, 0x02)
-#define PHY_REG_PAGE0_ID2             PHY_REG(0, 0x03)
-#define PHY_REG_PAGE0_ADV             PHY_REG(0, 0x04)
+#define PHY_REG_PAGE0_BMCR            PHY_REG(PHY_PAGE_0, 0x00)
+#define PHY_REG_PAGE0_BMSR            PHY_REG(PHY_PAGE_0, 0x01)
+#define PHY_REG_PAGE0_ID1             PHY_REG(PHY_PAGE_0, 0x02)
+#define PHY_REG_PAGE0_ID2             PHY_REG(PHY_PAGE_0, 0x03)
+#define PHY_REG_PAGE0_ADV             PHY_REG(PHY_PAGE_0, 0x04)
 #define PHY_REG_LPA                   0x05
 #define PHY_REG_EXP                   0x06
-#define PHY_REG_PAGE0_CTRL1000        PHY_REG(0, 0x09)
+#define PHY_REG_PAGE0_CTRL1000        PHY_REG(PHY_PAGE_0, 0x09)
 #define PHY_REG_PAGE0_STAT1000        PHY_REG(0, 0x0A)
 #define PHY_REG_MMD_CTRL              0x0D
 #define PHY_REG_MMD_DATA              0x0E
 #define PHY_REG_STAT1000_EXT1         0x0F
-#define PHY_REG_PAGE0_STAT100         PHY_REG(0, 0x10)
-#define PHY_REG_PAGE0_STAT1000_EXT2   PHY_REG(0, 0x11)
+#define PHY_REG_PAGE0_STAT100         PHY_REG(PHY_PAGE_0, 0x10)
+#define PHY_REG_PAGE0_STAT1000_EXT2   PHY_REG(PHY_PAGE_0, 0x11)
 #define PHY_REG_AUX_CTRL              0x12
 #define PHY_REG_PAGE0_ERROR_COUNTER_1 PHY_REG(0, 0x13)
 #define PHY_REG_PAGE0_ERROR_COUNTER_2 PHY_REG(0, 0x14)
-#define PHY_REG_PAGE0_EXT_CTRL_STAT   PHY_REG(0, 0x16)
-#define PHY_REG_PAGE0_EXT_CONTROL_1   PHY_REG(0, 0x17)
+#define PHY_REG_PAGE0_EXT_CTRL_STAT   PHY_REG(PHY_PAGE_0, 0x16)
+#define PHY_REG_PAGE0_EXT_CONTROL_1   PHY_REG(PHY_PAGE_0, 0x17)
 #define PHY_REG_LED_MODE              0x1d
 
 #define PHY_REG_PAGE_SELECTOR 0x1F
 
-#define PHY_REG_PAGE1_EXT_MODE_CTRL PHY_REG(1, 0x13)
+/* Extended Register */
+#define PHY_REG_PAGE1_EXT_MODE_CTRL  PHY_REG(PHY_PAGE_1, 0x13)
+#define PHY_REG_PAGE2_RGMII_CONTROL  PHY_REG(PHY_PAGE_2, 0x14)
+#define PHY_REG_PAGE2_MAC_IF_CONTROL PHY_REG(PHY_PAGE_2, 0x1b)
 
-#define PHY_REG_PAGE2_RGMII_CONTROL  PHY_REG(2, 0x14)
-#define PHY_REG_PAGE2_MAC_IF_CONTROL PHY_REG(2, 0x1b)
-
-/* phy page selectors */
-#define PHY_PAGE_0 0x00 // main registers space active
-#define PHY_PAGE_1 0x01 // reg 16 - 30 will be redirected to ext. register space 1
-#define PHY_PAGE_2 0x02 // reg 16 - 30 will be redirected to ext. register space 2
-#define PHY_PAGE_3 0x03 // reg 0 - 30 will be redirected to gpio register space
-
+/* selected bits in registers */
 #define BMCR_RESET     (1 << 15)
 #define BMCR_LOOPBACK  (1 << 14)
 #define BMCR_ANENABLE  (1 << 12)
@@ -94,10 +96,14 @@ struct mc_vsc8541_config {
 
 struct mc_vsc8541_data {
 	const struct device *dev;
+
 	struct phy_link_state state;
+	int active_page;
+
+	struct k_mutex mutex;
+
 	phy_callback_t cb;
 	void *cb_data;
-	struct k_mutex mutex;
 
 	struct k_thread link_monitor_thread;
 	uint8_t link_monitor_thread_stack[STACK_SIZE];
@@ -244,7 +250,8 @@ static int phy_mc_vsc8541_reset(const struct device *dev)
 	return ret;
 }
 
-static int phy_mc_vsc8541_get_speed(const struct device *dev, struct phy_link_state *state){
+static int phy_mc_vsc8541_get_speed(const struct device *dev, struct phy_link_state *state)
+{
 	struct mc_vsc8541_data *data = dev->data;
 	int ret;
 	uint32_t status;
@@ -269,23 +276,23 @@ static int phy_mc_vsc8541_get_speed(const struct device *dev, struct phy_link_st
 		return ret;
 	}
 
-	if ((status & (1<<2)) == 0){
+	if ((status & (1 << 2)) == 0) {
 		// no link
 		state->speed = LINK_HALF_10BASE_T;
 	}
 
-	if ((status & (1<<5)) == 0){
+	if ((status & (1 << 5)) == 0) {
 		// auto negotiation not yet complete
 		state->speed = LINK_HALF_10BASE_T;
 	}
 
-	if ((link1000_status & (1 << 12))){
+	if ((link1000_status & (1 << 12))) {
 		state->speed = LINK_FULL_1000BASE_T;
 	}
-	if (link100_status & (1 << 12)){
+	if (link100_status & (1 << 12)) {
 		state->speed = LINK_FULL_100BASE_T;
 	}
-	if (link10_status & (1 << 6)){
+	if (link10_status & (1 << 6)) {
 		state->speed = LINK_FULL_10BASE_T;
 	}
 
@@ -300,6 +307,7 @@ static int phy_mc_vsc8541_init(const struct device *dev)
 	data->cb_data = NULL;
 	data->state.is_up = false;
 	data->state.speed = LINK_HALF_10BASE_T;
+	data->active_page = -1;
 
 	/* Reset PHY */
 	int ret = phy_mc_vsc8541_reset(dev);
@@ -352,7 +360,7 @@ static int phy_mc_vsc8541_get_link(const struct device *dev, struct phy_link_sta
 	if (hasLink & auto_negotation_finished) {
 		state->is_up = 1;
 		ret = phy_mc_vsc8541_get_speed(dev, state);
-		if (ret){
+		if (ret) {
 			return ret;
 		}
 	} else {
@@ -393,7 +401,8 @@ void phy_mc_vsc8541_link_monitor(void *arg1, void *arg2, void *arg3)
 		k_sleep(K_MSEC(5000));
 		phy_mc_vsc8541_get_link(dev, &new_state);
 
-		if ((new_state.is_up != data->state.is_up) || (new_state.speed != data->state.speed)){
+		if ((new_state.is_up != data->state.is_up) ||
+		    (new_state.speed != data->state.speed)) {
 			/* state changed */
 			data->state.is_up = new_state.is_up;
 			data->state.speed = new_state.speed;
@@ -409,17 +418,23 @@ void phy_mc_vsc8541_link_monitor(void *arg1, void *arg2, void *arg3)
 static int phy_mc_vsc8541_read(const struct device *dev, uint16_t reg_addr, uint32_t *data)
 {
 	const struct mc_vsc8541_config *cfg = dev->config;
+	struct mc_vsc8541_data *dev_data = dev->data;
 	int ret;
 
 	/* Make sure excessive bits 16-31 are reset */
 	*data = 0U;
+
+	/* decode page and address */
 	uint32_t page = reg_addr >> 8;
 	reg_addr &= 0x00ff;
 
 	/* select page, given by register upper byte */
-	ret = mdio_write(cfg->mdio_dev, cfg->addr, PHY_REG_PAGE_SELECTOR, (uint16_t)page);
-	if (ret) {
-		return ret;
+	if (dev_data->active_page != page) {
+		ret = mdio_write(cfg->mdio_dev, cfg->addr, PHY_REG_PAGE_SELECTOR, (uint16_t)page);
+		if (ret) {
+			return ret;
+		}
+		dev_data->active_page = (int)page;
 	}
 
 	/* select register, given by register lower byte */
@@ -434,14 +449,18 @@ static int phy_mc_vsc8541_read(const struct device *dev, uint16_t reg_addr, uint
 static int phy_mc_vsc8541_write(const struct device *dev, uint16_t reg_addr, uint32_t data)
 {
 	const struct mc_vsc8541_config *cfg = dev->config;
+	struct mc_vsc8541_data *dev_data = dev->data;
 	int ret;
 	uint32_t page = reg_addr >> 8;
 	reg_addr &= 0x00ff;
 
 	/* select page, given by register upper byte */
-	ret = mdio_write(cfg->mdio_dev, cfg->addr, PHY_REG_PAGE_SELECTOR, (uint16_t)page);
-	if (ret) {
-		return ret;
+	if (dev_data->active_page != page) {
+		ret = mdio_write(cfg->mdio_dev, cfg->addr, PHY_REG_PAGE_SELECTOR, (uint16_t)page);
+		if (ret) {
+			return ret;
+		}
+		dev_data->active_page = (int)page;
 	}
 
 	/* write register, given by lower byte */
