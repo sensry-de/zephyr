@@ -3,6 +3,7 @@
  * Copyright (c) 2024 sensry.io
  */
 
+#include <zephyr/kernel.h>
 #include "soc.h"
 #include "udma.h"
 
@@ -127,17 +128,26 @@ int32_t sy1xx_udma_is_ready(uint32_t base, uint32_t channel)
 	return isBusy ? 0 : 1;
 }
 
+int32_t sy1xx_udma_wait_for_started()
+{
+	for (uint32_t i = 0; i < 500; i++) {
+		__asm__("nop");
+	}
+	return 0;
+}
+
 int32_t sy1xx_udma_wait_for_finished(uint32_t base, uint32_t channel)
 {
 	uint32_t channel_offset = channel == 0 ? 0x00 : 0x10;
 
 	volatile uint32_t timeout = 200;
+	uint32_t start_time = k_uptime_get_32();
 
 	while (SY1XX_UDMA_READ_REG(base, SY1XX_UDMA_CFG_REG + channel_offset) &
 	       (SY1XX_UDMA_CHANNEL_CFG_EN)) {
-		sy1xx_udma_busy_delay(1);
-		timeout--;
-		if (timeout == 0) {
+		k_yield();
+		uint32_t now = k_uptime_get_32();
+		if ((now - start_time) >= timeout) {
 			return -1;
 		}
 	}
@@ -170,6 +180,10 @@ int32_t sy1xx_udma_start(uint32_t base, uint32_t channel, uint32_t saddr, uint32
 	SY1XX_UDMA_WRITE_REG(base, SY1XX_UDMA_SIZE_REG + channel_offset, size);
 	SY1XX_UDMA_WRITE_REG(base, SY1XX_UDMA_CFG_REG + channel_offset,
 			     SY1XX_UDMA_CHANNEL_CFG_EN | optional_cfg);
+
+	/* udma takes < 1us for switching state to running; requesting the finished state within
+	 * this time will yield to "true" and thus to incorrect udma results */
+	sy1xx_udma_wait_for_started();
 
 	return 0;
 }
