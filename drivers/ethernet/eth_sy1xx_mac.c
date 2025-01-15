@@ -101,7 +101,7 @@ static int sy1xx_mac_initialize(const struct device *dev)
 	/* create the receiver thread in stopped mode; start with device start request */
 	k_thread_create(&data->rx_data_thread, (k_thread_stack_t *)data->rx_data_thread_stack,
 			STACK_SIZE, sy1xx_mac_rx_thread_entry, (void *)dev, NULL, NULL,
-			THREAD_PRIORITY, 0, K_FOREVER);
+			THREAD_PRIORITY, 0, K_MSEC(3000));
 
 	k_thread_name_set(&data->rx_data_thread, "mac-rx-thread");
 
