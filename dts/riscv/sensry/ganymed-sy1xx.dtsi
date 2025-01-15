@@ -3,6 +3,8 @@
 
 /dts-v1/;
 
+#include <zephyr/dt-bindings/pinctrl/sy1xx-pinctrl.h>
+
 / {
 	#address-cells = <1>;
 	#size-cells = <0>;
@@ -148,6 +150,16 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			status = "disabled";
+		};
+
+		gpio0: gpio@1a101000 {
+			compatible = "sensry,sy1xx-gpio";
+			gpio-controller;
+			#gpio-cells = <2>;
+			reg = <0x1a101000 0x20>;
+			pad-cfg = <SY1XX_GPIO0_PAD_CFG0>;
+			status = "okay";
+			ngpios = <32>;
 		};
 
 		pinctrl: pinctrl@1a104000 {
