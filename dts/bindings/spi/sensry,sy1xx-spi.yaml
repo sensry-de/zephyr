@@ -15,5 +15,10 @@ properties:
     type: int
     required: true
 
+  cs-pin:
+    type: int
+    required: false
+    description: Chip select pin number (optional, use -1 if not configured)
+
   pinctrl-0:
     required: true

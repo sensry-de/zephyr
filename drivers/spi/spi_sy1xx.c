@@ -22,6 +22,7 @@ LOG_MODULE_REGISTER(spi_sy1xx);
 struct sy1xx_spi_config {
 	uint32_t base;
 	uint32_t inst;
+	int32_t cs_pin;
 
 	uint8_t cpol;
 	uint8_t cpha;
@@ -38,23 +39,11 @@ struct sy1xx_spi_data {
 	struct spi_context ctx;
 	struct k_spinlock lock;
 
-	uint32_t cs;
-
-	uint8_t write[SY1XX_SPI_MAX_BUFFER_SIZE/2];
+	uint8_t write[SY1XX_SPI_MAX_BUFFER_SIZE / 2];
 	uint8_t read[SY1XX_SPI_MAX_BUFFER_SIZE];
 };
 
-struct sy1xx_spi_xfer {
-	uint8_t cs;
-
-	uint32_t addr_width;
-	uint32_t addr;
-
-	uint16_t data_len;
-	uint8_t *data;
-};
-
-#define SPI_CMD_OFFSET 4
+#define SPI_CMD_OFFSET (4)
 
 /* Commands for SPI UDMA */
 #define SPI_CMD_CFG       (0 << SPI_CMD_OFFSET)
@@ -141,6 +130,7 @@ static int sy1xx_spi_init(const struct device *dev)
 
 	struct sy1xx_spi_config *config = (struct sy1xx_spi_config *)dev->config;
 	struct sy1xx_spi_data *data = (struct sy1xx_spi_data *)dev->data;
+	int32_t ret;
 
 	for (uint32_t i = 0; i < SY1XX_SPI_MAX_BUFFER_SIZE; i++) {
 		data->write[i] = 0x22;
@@ -151,10 +141,10 @@ static int sy1xx_spi_init(const struct device *dev)
 	sy1xx_udma_enable_clock(SY1XX_UDMA_MODULE_SPI, config->inst);
 
 	/* PAD config */
-	int32_t ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
-
+	ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
 	if (ret < 0) {
 		LOG_ERR("SPI failed to set pin config for %u", config->inst);
+		return ret;
 	}
 
 	uint32_t spi_freq = 8000000;
@@ -233,12 +223,12 @@ static int32_t sy1xx_spi_full_duplex_transfer(const struct device *dev, uint8_t 
 	return 0;
 }
 
-static int32_t sy1xx_spi_set_cs(const struct device *dev, uint32_t cs)
+static int32_t sy1xx_spi_set_cs(const struct device *dev)
 {
 	struct sy1xx_spi_config *config = (struct sy1xx_spi_config *)dev->config;
 	struct sy1xx_spi_data *data = (struct sy1xx_spi_data *)dev->data;
 
-	LOG_DBG("SPI set CS%d", cs);
+	LOG_DBG("SPI set CS%d", config->cs_pin);
 
 	uint8_t *cmd_buf = &data->write[0];
 	uint32_t count = 0;
@@ -247,20 +237,26 @@ static int32_t sy1xx_spi_set_cs(const struct device *dev, uint32_t cs)
 	SY1XX_UDMA_WAIT_FOR_FINISHED_TX(config->base);
 	SY1XX_UDMA_WAIT_FOR_FINISHED_RX(config->base);
 
-	/* spi cfg */
+	/* prepare spi cfg */
 	cmd_buf[count++] = SPI_CMD_CFG_3(config->div);
 	cmd_buf[count++] = SPI_CMD_CFG_2(config->cpol, config->cpha);
 	cmd_buf[count++] = SPI_CMD_CFG_1();
 	cmd_buf[count++] = SPI_CMD_CFG_0();
 
-	/* start with selecting chip-select */
-	cmd_buf[count++] = SPI_CMD_SOT_3(cs);
-	cmd_buf[count++] = SPI_CMD_SOT_2();
-	cmd_buf[count++] = SPI_CMD_SOT_1();
-	cmd_buf[count++] = SPI_CMD_SOT_0();
+	/* check if spi controller chip select is configured */
+	if (config->cs_pin >= 0) {
+		/* start with selecting hardware chip-select */
+		cmd_buf[count++] = SPI_CMD_SOT_3(config->cs_pin);
+		cmd_buf[count++] = SPI_CMD_SOT_2();
+		cmd_buf[count++] = SPI_CMD_SOT_1();
+		cmd_buf[count++] = SPI_CMD_SOT_0();
+	}
 
+	/* enable gpio cs (if configured) */
+	spi_context_cs_control(&data->ctx, true);
+
+	/* transfer configuration via udma to spi controller */
 	SY1XX_UDMA_START_TX(config->base, (uint32_t)cmd_buf, count, 0);
-
 	SY1XX_UDMA_WAIT_FOR_FINISHED_TX(config->base);
 
 	int32_t xfer_count = (int32_t)count - SY1XX_UDMA_GET_REMAINING_TX(config->base);
@@ -277,17 +273,19 @@ static int32_t sy1xx_spi_reset_cs(const struct device *dev)
 
 	LOG_DBG("SPI reset CS");
 
+	/* reset gpio chip select */
+	spi_context_cs_control(&data->ctx, false);
+
 	uint8_t *cmd_buf = &data->write[0];
 	uint32_t count = 0;
 
-	/* end of transmission */
+	/* prepare end of transmission (includes resetting any enabled chip selects) */
 	cmd_buf[count++] = SPI_CMD_EOT3(0);
 	cmd_buf[count++] = SPI_CMD_EOT2();
 	cmd_buf[count++] = SPI_CMD_EOT1();
 	cmd_buf[count++] = SPI_CMD_EOT0();
 
 	SY1XX_UDMA_START_TX(config->base, (uint32_t)cmd_buf, count, 0);
-
 	SY1XX_UDMA_WAIT_FOR_FINISHED_TX(config->base);
 
 	int32_t xfer_count = (int32_t)count - SY1XX_UDMA_GET_REMAINING_TX(config->base);
@@ -416,7 +414,7 @@ static int sy1xx_spi_transceive_sync(const struct device *dev, const struct spi_
 {
 	struct sy1xx_spi_data *data = (struct sy1xx_spi_data *)dev->data;
 
-	int ret = -EINVAL;
+	int ret = 0;
 	size_t tx_count = 0;
 	size_t rx_count = 0;
 	const struct spi_buf *tx = NULL;
@@ -432,8 +430,13 @@ static int sy1xx_spi_transceive_sync(const struct device *dev, const struct spi_
 		rx_count = rx_bufs->count;
 	}
 
-	data->cs = 0;
-	sy1xx_spi_set_cs(dev, data->cs);
+	spi_context_lock(&data->ctx, false, NULL, NULL, config);
+
+	ret = sy1xx_spi_set_cs(dev);
+	if (ret) {
+		LOG_ERR("SPI set cs failed");
+		goto done;
+	}
 
 	/* handle symmetrical tx and rx transfers */
 	while (tx_count != 0 && rx_count != 0) {
@@ -448,9 +451,8 @@ static int sy1xx_spi_transceive_sync(const struct device *dev, const struct spi_
 		}
 
 		if (ret < 0) {
-			sy1xx_spi_reset_cs(dev);
 			LOG_ERR("Failed to transfer data");
-			return ret;
+			goto done;
 		}
 
 		tx++;
@@ -463,9 +465,8 @@ static int sy1xx_spi_transceive_sync(const struct device *dev, const struct spi_
 	for (; tx_count != 0; tx_count--) {
 		ret = sy1xx_spi_half_duplex_write(dev, tx->buf, tx->len);
 		if (ret < 0) {
-			sy1xx_spi_reset_cs(dev);
 			LOG_ERR("Failed to transfer data");
-			return ret;
+			goto done;
 		}
 		tx++;
 	}
@@ -474,16 +475,18 @@ static int sy1xx_spi_transceive_sync(const struct device *dev, const struct spi_
 	for (; rx_count != 0; rx_count--) {
 		ret = sy1xx_spi_half_duplex_read(dev, rx->buf, rx->len);
 		if (ret < 0) {
-			sy1xx_spi_reset_cs(dev);
 			LOG_ERR("Failed to transfer data");
-			return ret;
+			goto done;
 		}
 		rx++;
 	}
 
+done:
 	sy1xx_spi_reset_cs(dev);
 
-	return 0;
+	spi_context_release(&data->ctx, ret);
+
+	return ret;
 }
 
 static int sy1xx_spi_release(const struct device *dev, const struct spi_config *config)
@@ -504,6 +507,7 @@ static const struct spi_driver_api sy1xx_spi_driver_api = {
 	static struct sy1xx_spi_config sy1xx_spi_dev_config_##n = {                                \
 		.base = (uint32_t)DT_INST_REG_ADDR(n),                                             \
 		.inst = (uint32_t)DT_INST_PROP(n, instance),                                       \
+		.cs_pin = DT_PROP_OR(DT_NODELABEL(n), cs_pin, -1),                                 \
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(n),                                         \
 	};                                                                                         \
                                                                                                    \
@@ -511,7 +515,7 @@ static const struct spi_driver_api sy1xx_spi_driver_api = {
 	__aligned(4) sy1xx_spi_dev_data_##n = {                                                    \
 		SPI_CONTEXT_INIT_LOCK(sy1xx_spi_dev_data_##n, ctx),                                \
 		SPI_CONTEXT_INIT_SYNC(sy1xx_spi_dev_data_##n, ctx),                                \
-	};                                                                                         \
+		SPI_CONTEXT_CS_GPIOS_INITIALIZE(DT_DRV_INST(n), ctx)};                             \
                                                                                                    \
 	DEVICE_DT_INST_DEFINE(n, &sy1xx_spi_init, NULL, &sy1xx_spi_dev_data_##n,                   \
 			      &sy1xx_spi_dev_config_##n, POST_KERNEL, CONFIG_SPI_INIT_PRIORITY,    \
