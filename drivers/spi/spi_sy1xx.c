@@ -1,6 +1,7 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
  * Copyright (c) 2024 sensry.io
+ *
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 #define DT_DRV_COMPAT sensry_sy1xx_spi
@@ -22,6 +23,7 @@ LOG_MODULE_REGISTER(spi_sy1xx);
 struct sy1xx_spi_config {
 	uint32_t base;
 	uint32_t inst;
+
 	int32_t cs_pin;
 
 	uint8_t cpol;
