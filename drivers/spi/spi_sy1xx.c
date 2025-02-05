@@ -20,30 +20,6 @@ LOG_MODULE_REGISTER(spi_sy1xx);
 #include <udma.h>
 #include <zephyr/drivers/pinctrl.h>
 
-struct sy1xx_spi_config {
-	uint32_t base;
-	uint32_t inst;
-
-	int32_t cs_pin;
-
-	uint8_t cpol;
-	uint8_t cpha;
-	uint8_t div;
-	uint8_t quad_spi;
-
-	const struct pinctrl_dev_config *pcfg;
-};
-
-#define SY1XX_SPI_MAX_BIT_COUNT   (12800)
-#define SY1XX_SPI_MAX_BUFFER_SIZE (SY1XX_SPI_MAX_BIT_COUNT / 8)
-
-struct sy1xx_spi_data {
-	struct spi_context ctx;
-	struct k_spinlock lock;
-
-	uint8_t write[SY1XX_SPI_MAX_BUFFER_SIZE / 2];
-	uint8_t read[SY1XX_SPI_MAX_BUFFER_SIZE];
-};
 
 #define SPI_CMD_OFFSET (4)
 
@@ -116,21 +92,48 @@ struct sy1xx_spi_data {
 
 #define ROUND_UP_DIV_4(x) ((x + 3) / 4)
 
+
+#define SY1XX_SPI_MAX_BIT_COUNT   (10240)
+#define SY1XX_SPI_MAX_BUFFER_SIZE (SY1XX_SPI_MAX_BIT_COUNT / 8)
+
+
+struct sy1xx_spi_config {
+	uint32_t base;
+	uint32_t inst;
+
+	int32_t cs_pin;
+
+	uint8_t cpol;
+	uint8_t cpha;
+	uint8_t div;
+	uint8_t quad_spi;
+
+	const struct pinctrl_dev_config *pcfg;
+};
+
+struct sy1xx_spi_data {
+	struct spi_context ctx;
+	struct k_spinlock lock;
+
+	uint8_t write[SY1XX_SPI_MAX_BUFFER_SIZE];
+	uint8_t read[SY1XX_SPI_MAX_BUFFER_SIZE];
+};
+
 static void sy1xx_spi_udma_reset(const struct device *dev)
 {
-	struct sy1xx_spi_config *config = (struct sy1xx_spi_config *)dev->config;
+	struct sy1xx_spi_config *cfg = (struct sy1xx_spi_config *)dev->config;
 
-	SY1XX_UDMA_CANCEL_RX(config->base);
-	SY1XX_UDMA_CANCEL_TX(config->base);
+	SY1XX_UDMA_CANCEL_RX(cfg->base);
+	SY1XX_UDMA_CANCEL_TX(cfg->base);
 
-	SY1XX_UDMA_WAIT_FOR_FINISHED_TX(config->base);
-	SY1XX_UDMA_WAIT_FOR_FINISHED_RX(config->base);
+	SY1XX_UDMA_WAIT_FOR_FINISHED_TX(cfg->base);
+	SY1XX_UDMA_WAIT_FOR_FINISHED_RX(cfg->base);
 }
 
 static int sy1xx_spi_init(const struct device *dev)
 {
 
-	struct sy1xx_spi_config *config = (struct sy1xx_spi_config *)dev->config;
+	struct sy1xx_spi_config *cfg = (struct sy1xx_spi_config *)dev->config;
 	struct sy1xx_spi_data *data = (struct sy1xx_spi_data *)dev->data;
 	int32_t ret;
 
@@ -140,22 +143,22 @@ static int sy1xx_spi_init(const struct device *dev)
 	}
 
 	/* UDMA clock enable */
-	sy1xx_udma_enable_clock(SY1XX_UDMA_MODULE_SPI, config->inst);
+	sy1xx_udma_enable_clock(SY1XX_UDMA_MODULE_SPI, cfg->inst);
 
 	/* PAD config */
-	ret = pinctrl_apply_state(config->pcfg, PINCTRL_STATE_DEFAULT);
+	ret = pinctrl_apply_state(cfg->pcfg, PINCTRL_STATE_DEFAULT);
 	if (ret < 0) {
-		LOG_ERR("SPI failed to set pin config for %u", config->inst);
+		LOG_ERR("SPI failed to set pin config for %u", cfg->inst);
 		return ret;
 	}
 
 	uint32_t spi_freq = 8000000;
 	uint32_t div = sy1xx_soc_get_peripheral_clock() / spi_freq;
 
-	config->cpol = 0;
-	config->cpha = 0;
-	config->div = div;
-	config->quad_spi = 0;
+	cfg->cpol = 0;
+	cfg->cpha = 0;
+	cfg->div = div;
+	cfg->quad_spi = 0;
 
 	sy1xx_spi_udma_reset(dev);
 
@@ -225,43 +228,45 @@ static int32_t sy1xx_spi_full_duplex_transfer(const struct device *dev, uint8_t 
 	return 0;
 }
 
-static int32_t sy1xx_spi_set_cs(const struct device *dev)
+static int32_t sy1xx_spi_set_cs(const struct device *dev, const struct spi_config *config)
 {
-	struct sy1xx_spi_config *config = (struct sy1xx_spi_config *)dev->config;
+	struct sy1xx_spi_config *cfg = (struct sy1xx_spi_config *)dev->config;
 	struct sy1xx_spi_data *data = (struct sy1xx_spi_data *)dev->data;
 
-	LOG_DBG("SPI set CS%d", config->cs_pin);
+	LOG_DBG("SPI set CS%d", cfg->cs_pin);
 
 	uint8_t *cmd_buf = &data->write[0];
 	uint32_t count = 0;
 
 	/* stop any prior transmission */
-	SY1XX_UDMA_WAIT_FOR_FINISHED_TX(config->base);
-	SY1XX_UDMA_WAIT_FOR_FINISHED_RX(config->base);
+	SY1XX_UDMA_WAIT_FOR_FINISHED_TX(cfg->base);
+	SY1XX_UDMA_WAIT_FOR_FINISHED_RX(cfg->base);
 
 	/* prepare spi cfg */
-	cmd_buf[count++] = SPI_CMD_CFG_3(config->div);
-	cmd_buf[count++] = SPI_CMD_CFG_2(config->cpol, config->cpha);
+	cmd_buf[count++] = SPI_CMD_CFG_3(cfg->div);
+	cmd_buf[count++] = SPI_CMD_CFG_2(cfg->cpol, cfg->cpha);
 	cmd_buf[count++] = SPI_CMD_CFG_1();
 	cmd_buf[count++] = SPI_CMD_CFG_0();
 
 	/* check if spi controller chip select is configured */
-	if (config->cs_pin >= 0) {
+	if (cfg->cs_pin >= 0) {
 		/* start with selecting hardware chip-select */
-		cmd_buf[count++] = SPI_CMD_SOT_3(config->cs_pin);
+		cmd_buf[count++] = SPI_CMD_SOT_3(cfg->cs_pin);
 		cmd_buf[count++] = SPI_CMD_SOT_2();
 		cmd_buf[count++] = SPI_CMD_SOT_1();
 		cmd_buf[count++] = SPI_CMD_SOT_0();
 	}
 
+	data->ctx.config = config;
+
 	/* enable gpio cs (if configured) */
 	spi_context_cs_control(&data->ctx, true);
 
 	/* transfer configuration via udma to spi controller */
-	SY1XX_UDMA_START_TX(config->base, (uint32_t)cmd_buf, count, 0);
-	SY1XX_UDMA_WAIT_FOR_FINISHED_TX(config->base);
+	SY1XX_UDMA_START_TX(cfg->base, (uint32_t)cmd_buf, count, 0);
+	SY1XX_UDMA_WAIT_FOR_FINISHED_TX(cfg->base);
 
-	int32_t xfer_count = (int32_t)count - SY1XX_UDMA_GET_REMAINING_TX(config->base);
+	int32_t xfer_count = (int32_t)count - SY1XX_UDMA_GET_REMAINING_TX(cfg->base);
 	if (xfer_count != count) {
 		return -EINVAL;
 	}
@@ -270,7 +275,7 @@ static int32_t sy1xx_spi_set_cs(const struct device *dev)
 
 static int32_t sy1xx_spi_reset_cs(const struct device *dev)
 {
-	struct sy1xx_spi_config *config = (struct sy1xx_spi_config *)dev->config;
+	struct sy1xx_spi_config *cfg = (struct sy1xx_spi_config *)dev->config;
 	struct sy1xx_spi_data *data = (struct sy1xx_spi_data *)dev->data;
 
 	LOG_DBG("SPI reset CS");
@@ -287,10 +292,10 @@ static int32_t sy1xx_spi_reset_cs(const struct device *dev)
 	cmd_buf[count++] = SPI_CMD_EOT1();
 	cmd_buf[count++] = SPI_CMD_EOT0();
 
-	SY1XX_UDMA_START_TX(config->base, (uint32_t)cmd_buf, count, 0);
-	SY1XX_UDMA_WAIT_FOR_FINISHED_TX(config->base);
+	SY1XX_UDMA_START_TX(cfg->base, (uint32_t)cmd_buf, count, 0);
+	SY1XX_UDMA_WAIT_FOR_FINISHED_TX(cfg->base);
 
-	int32_t xfer_count = (int32_t)count - SY1XX_UDMA_GET_REMAINING_TX(config->base);
+	int32_t xfer_count = (int32_t)count - SY1XX_UDMA_GET_REMAINING_TX(cfg->base);
 	if (xfer_count != count) {
 		return -EINVAL;
 	}
@@ -307,7 +312,7 @@ static int32_t sy1xx_spi_half_duplex_read(const struct device *dev, uint8_t *rx_
 					  uint32_t rx_len)
 {
 
-	struct sy1xx_spi_config *config = (struct sy1xx_spi_config *)dev->config;
+	struct sy1xx_spi_config *cfg = (struct sy1xx_spi_config *)dev->config;
 	struct sy1xx_spi_data *data = (struct sy1xx_spi_data *)dev->data;
 
 	LOG_DBG("SPI read %d bytes", rx_len);
@@ -321,14 +326,14 @@ static int32_t sy1xx_spi_half_duplex_read(const struct device *dev, uint8_t *rx_
 	cmd_buf[count++] = SPI_CMD_READ_DATA1();
 	cmd_buf[count++] = SPI_CMD_READ_DATA0(0, 0);
 
-	SY1XX_UDMA_START_RX(config->base, (uint32_t)data->read, rx_len,
+	SY1XX_UDMA_START_RX(cfg->base, (uint32_t)data->read, rx_len,
 			    SY1XX_UDMA_RX_DATA_ADDR_INC_SIZE_32);
-	SY1XX_UDMA_START_TX(config->base, (uint32_t)cmd_buf, count, 0);
+	SY1XX_UDMA_START_TX(cfg->base, (uint32_t)cmd_buf, count, 0);
 
-	SY1XX_UDMA_WAIT_FOR_FINISHED_TX(config->base);
-	SY1XX_UDMA_WAIT_FOR_FINISHED_RX(config->base);
+	SY1XX_UDMA_WAIT_FOR_FINISHED_TX(cfg->base);
+	SY1XX_UDMA_WAIT_FOR_FINISHED_RX(cfg->base);
 
-	int32_t xfer_count = (int32_t)rx_len - SY1XX_UDMA_GET_REMAINING_RX(config->base);
+	int32_t xfer_count = (int32_t)rx_len - SY1XX_UDMA_GET_REMAINING_RX(cfg->base);
 
 	if ((xfer_count > 0) && (xfer_count <= rx_len)) {
 		memcpy(rx_buf, &data->read[0], xfer_count);
@@ -352,7 +357,7 @@ static int32_t sy1xx_spi_half_duplex_write(const struct device *dev, uint8_t *tx
 					   uint32_t tx_len)
 {
 
-	struct sy1xx_spi_config *config = (struct sy1xx_spi_config *)dev->config;
+	struct sy1xx_spi_config *cfg = (struct sy1xx_spi_config *)dev->config;
 	struct sy1xx_spi_data *data = (struct sy1xx_spi_data *)dev->data;
 
 	LOG_DBG("SPI write %d bytes", tx_len);
@@ -364,7 +369,7 @@ static int32_t sy1xx_spi_half_duplex_write(const struct device *dev, uint8_t *tx
 	cmd_buf[count++] = SPI_CMD_SEND_DATA3(tx_len * 8);
 	cmd_buf[count++] = SPI_CMD_SEND_DATA2(tx_len * 8);
 	cmd_buf[count++] = SPI_CMD_SEND_DATA1();
-	cmd_buf[count++] = SPI_CMD_SEND_DATA0(config->quad_spi);
+	cmd_buf[count++] = SPI_CMD_SEND_DATA0(cfg->quad_spi);
 
 	/* data; we need to fill multiple of 32bit size */
 	uint32_t padded_len = ROUND_UP_DIV_4(tx_len) * 4;
@@ -375,11 +380,11 @@ static int32_t sy1xx_spi_half_duplex_write(const struct device *dev, uint8_t *tx
 
 	count += padded_len;
 
-	SY1XX_UDMA_START_TX(config->base, (uint32_t)cmd_buf, count, 0);
+	SY1XX_UDMA_START_TX(cfg->base, (uint32_t)cmd_buf, count, 0);
 
-	SY1XX_UDMA_WAIT_FOR_FINISHED_TX(config->base);
+	SY1XX_UDMA_WAIT_FOR_FINISHED_TX(cfg->base);
 
-	int32_t xfer_count = (int32_t)tx_len - SY1XX_UDMA_GET_REMAINING_TX(config->base);
+	int32_t xfer_count = (int32_t)tx_len - SY1XX_UDMA_GET_REMAINING_TX(cfg->base);
 
 	if ((xfer_count > 0) && (xfer_count <= tx_len)) {
 #if DEBUG_OUT
@@ -434,7 +439,7 @@ static int sy1xx_spi_transceive_sync(const struct device *dev, const struct spi_
 
 	spi_context_lock(&data->ctx, false, NULL, NULL, config);
 
-	ret = sy1xx_spi_set_cs(dev);
+	ret = sy1xx_spi_set_cs(dev, config);
 	if (ret) {
 		LOG_ERR("SPI set cs failed");
 		goto done;
@@ -506,10 +511,10 @@ static const struct spi_driver_api sy1xx_spi_driver_api = {
                                                                                                    \
 	PINCTRL_DT_INST_DEFINE(n);                                                                 \
                                                                                                    \
-	static struct sy1xx_spi_config sy1xx_spi_dev_config_##n = {                                \
+	static const struct sy1xx_spi_config sy1xx_spi_dev_config_##n = {                          \
 		.base = (uint32_t)DT_INST_REG_ADDR(n),                                             \
 		.inst = (uint32_t)DT_INST_PROP(n, instance),                                       \
-		.cs_pin = DT_PROP_OR(DT_NODELABEL(n), cs_pin, -1),                                 \
+		.cs_pin = DT_INST_PROP_OR(n, cs_pin, -1),                                          \
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(n),                                         \
 	};                                                                                         \
                                                                                                    \
