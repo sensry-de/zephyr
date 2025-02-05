@@ -18,7 +18,9 @@ properties:
   cs-pin:
     type: int
     required: false
-    description: Chip select pin number (optional, use -1 if not configured)
+    description: SPI controller has 2 dedicated chip select pins that can be controlled
+      directly without gpio interaction needed. Set to 0 or 1 to use respective pins. 
+      Optionally set -1 in case gpio should be used.
 
   pinctrl-0:
     required: true
