@@ -200,3 +200,4 @@
 				 &rgmii_rxd0 &rgmii_rxd1 &rgmii_rxd2 &rgmii_rxd3>;
 	pinctrl-names = "default";
 };
+
