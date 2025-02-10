@@ -36,7 +36,7 @@ The SoC has the following core features:
 
 
 Board Assembly Options
-**********************
+======================
 
 The Ganymed SoC can be assembled in two variants:
 
@@ -44,26 +44,50 @@ The Ganymed SoC can be assembled in two variants:
   * SY120-GEN1 - Generic Module type 1 with top level sensors (Bosch BME680 - SPI1 , Bosch BMA456 - SPI0, Bosch BMG250 - SPI2, STMicro MIS2DH - I2C0)
 
 
-Hardware Features
-*****************
+Supported Features
+==================
 
-The ``ganymed-sk/sy120-gbm`` board supports the following hardware features:
+The ``ganymed-bob/sy120-gbm`` board supports the following hardware features:
 
-
-* Power source via 24 V (external) or microUSB (5V)
-* 10-pin JTAG connector (Olimex ARM-JTAG-OCD-H with Sensry JTAG adapter)
-* USB over FTDI (connected to UART0)
-* microSD slot (bottom side, connected to SPI5)
-* WiFi/BLE module (connected to UART2)
-* Industrial RJ45 10/100/1000BaseT Ethernet Connector
-* User LED (connected to GPIO10)
-* On-board sensors:
-    * STMicro MIS2DH vibration sensor (connected to I2C1)
-    * Stereo TDK ICS-43434 MEMS microphone (connected I2S0)
++-----------+------------+----------------------+
+| Interface | Controller | Driver/Component     |
++===========+============+======================+
+| CLOCK     | on-chip    | clock_control        |
++-----------+------------+----------------------+
+| GPIO      | on-chip    | gpio                 |
++-----------+------------+----------------------+
+| TWIM      | on-chip    | i2c                  |
++-----------+------------+----------------------+
+| SPI(M)    | on-chip    | spi                  |
++-----------+------------+----------------------+
+| UART      | on-chip    | serial               |
++-----------+------------+----------------------+
+| TSN       | on-chip    | ethernet MAC         |
++-----------+------------+----------------------+
+| MDIO      | on-chip    |                      |
++-----------+------------+----------------------+
+| TIMER     | on-chip    |                      |
++-----------+------------+----------------------+
+| PINCTRL   | on-chip    |                      |
++-----------+------------+----------------------+
+| I2S       | on-chip    | coming soon          |
++-----------+------------+----------------------+
+| CAN       | on-chip    | CAN - coming soon    |
++-----------+------------+----------------------+
+| SPU       | on-chip    | system protection    |
++-----------+------------+----------------------+
+| GRTC      | on-chip    | counter              |
++-----------+------------+----------------------+
+| PWM       | on-chip    | pwm                  |
++-----------+------------+----------------------+
+| MRAM      | on-chip    | non-volatile memory  |
++-----------+------------+----------------------+
+| SAADC     | on-chip    | adc - coming soon    |
++-----------+------------+----------------------+
 
 Other hardware features have not been enabled yet for this board.
 
-The ``ganymed-bob/sy120-gen1`` board includes all hardware features of the ``ganymed-sk/sy120-gbm`` board and comes additionally
+The ``ganymed-bob/sy120-gen1`` board includes all hardware features of the ``ganymed-bob/sy120-gbm`` board and comes additionally
 with these features:
 
 +-----------+------------+----------------------+
@@ -79,6 +103,24 @@ with these features:
 +-----------+------------+----------------------+
 
 Other hardware features have not been enabled yet for this board.
+
+Board Features
+*****************
+
+The ``ganymed-sk/sy120-gbm`` board supports the following hardware features:
+
+* Power source via 24 V (external) or microUSB (5V)
+* 10-pin JTAG connector (Olimex ARM-JTAG-OCD-H with Sensry JTAG adapter)
+* USB over FTDI (connected to UART0)
+* microSD slot (bottom side, connected to SPI5)
+* WiFi/BLE module (connected to UART2)
+* Industrial RJ45 10/100/1000BaseT Ethernet Connector
+* User LED (connected to GPIO10)
+* On-board sensors:
+    * STMicro MIS2DH vibration sensor (connected to I2C1)
+    * Stereo TDK ICS-43434 MEMS microphone (connected I2S0)
+
+For more detailed description please refer to `Ganymed StarterKit Documentation`_
 
 Power
 *****
@@ -103,3 +145,7 @@ The sample output should be:
 .. code-block:: console
 
     Hello World! ganymed-sk/sy120-gbm
+
+.. target-notes::
+
+.. _`Ganymed StarterKit Documentation`: https://docs.sensry.net/datasheets/sy120-sk/
