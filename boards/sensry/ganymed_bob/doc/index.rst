@@ -16,7 +16,7 @@ RISC-V SoC with optional sensor level.
 
 The SoC has the following core features:
 
-* 32-Bit RSIC-V 1+8-core processor, up to 500MHz
+* 32-Bit RISC-V 1+8-core processor, up to 500MHz
 
   * 1x Data Acquisition Unit
   * 8x Data Processing Unit
@@ -28,7 +28,6 @@ The SoC has the following core features:
 * 512 KB Global MRAM
 * 512 KB Secure MRAM
 * CLOCK
-* RAM
 * :abbr:`32x GPIO (General Purpose Input Output)`
 * :abbr:`4x TWIM (I2C-compatible two-wire interface with MicroDMA)`
 * 4x I2S
@@ -77,7 +76,7 @@ The ``ganymed-bob/sy120-gbm`` board supports the following hardware features:
 +-----------+------------+----------------------+
 | CLOCK     | on-chip    | clock_control        |
 +-----------+------------+----------------------+
-| MRAM      | on-chip    | flash                |
+| MRAM      | on-chip    | non-volatile memory  |
 +-----------+------------+----------------------+
 | GPIO      | on-chip    | gpio                 |
 +-----------+------------+----------------------+
@@ -87,9 +86,7 @@ The ``ganymed-bob/sy120-gbm`` board supports the following hardware features:
 +-----------+------------+----------------------+
 | GRTC      | on-chip    | counter              |
 +-----------+------------+----------------------+
-| RTT       | Segger     | console              |
-+-----------+------------+----------------------+
-| SPI(M/S)  | on-chip    | spi                  |
+| SPI(M)    | on-chip    | spi                  |
 +-----------+------------+----------------------+
 | SPU       | on-chip    | system protection    |
 +-----------+------------+----------------------+
