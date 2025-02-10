@@ -72,29 +72,37 @@ The ``ganymed-bob/sy120-gbm`` board supports the following hardware features:
 +-----------+------------+----------------------+
 | Interface | Controller | Driver/Component     |
 +===========+============+======================+
-| SAADC     | on-chip    | adc                  |
-+-----------+------------+----------------------+
 | CLOCK     | on-chip    | clock_control        |
-+-----------+------------+----------------------+
-| MRAM      | on-chip    | non-volatile memory  |
 +-----------+------------+----------------------+
 | GPIO      | on-chip    | gpio                 |
 +-----------+------------+----------------------+
 | TWIM      | on-chip    | i2c                  |
 +-----------+------------+----------------------+
-| PWM       | on-chip    | pwm                  |
-+-----------+------------+----------------------+
-| GRTC      | on-chip    | counter              |
-+-----------+------------+----------------------+
 | SPI(M)    | on-chip    | spi                  |
-+-----------+------------+----------------------+
-| SPU       | on-chip    | system protection    |
 +-----------+------------+----------------------+
 | UART      | on-chip    | serial               |
 +-----------+------------+----------------------+
 | TSN       | on-chip    | ethernet MAC         |
 +-----------+------------+----------------------+
-| CAN       | on-chip    | CAN                  |
+| MDIO      | on-chip    |                      |
++-----------+------------+----------------------+
+| TIMER     | on-chip    |                      |
++-----------+------------+----------------------+
+| PINCTRL   | on-chip    |                      |
++-----------+------------+----------------------+
+| I2S       | on-chip    | coming soon          |
++-----------+------------+----------------------+
+| CAN       | on-chip    | CAN - coming soon    |
++-----------+------------+----------------------+
+| SPU       | on-chip    | system protection    |
++-----------+------------+----------------------+
+| GRTC      | on-chip    | counter              |
++-----------+------------+----------------------+
+| PWM       | on-chip    | pwm                  |
++-----------+------------+----------------------+
+| MRAM      | on-chip    | non-volatile memory  |
++-----------+------------+----------------------+
+| SAADC     | on-chip    | adc - coming soon    |
 +-----------+------------+----------------------+
 
 Other hardware features have not been enabled yet for this board.
@@ -115,6 +123,9 @@ with these features:
 +-----------+------------+----------------------+
 
 Other hardware features have not been enabled yet for this board.
+
+For more detailed description please refer to `Ganymed BreakOut Board Documentation`_
+
 
 Power
 *****
@@ -139,3 +150,7 @@ The sample output should be:
 .. code-block:: console
 
     Hello World! ganymed-bob/sy120-gbm
+
+.. target-notes::
+
+.. _`Ganymed BreakOut Board Documentation`: https://docs.sensry.net/datasheets/sy120-bob/
