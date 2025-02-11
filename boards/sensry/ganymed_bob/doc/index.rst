@@ -144,7 +144,7 @@ building and running.
 Testing the Ganymed BreakOut Board
 **********************************
 
-Test the Ganymed with a :zephyr:code-sample:`blinky` sample.
+Test the Ganymed with a :zephyr:code-sample:`hello_world` sample.
 The sample output should be:
 
 .. code-block:: console
