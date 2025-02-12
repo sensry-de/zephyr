@@ -131,7 +131,7 @@ Power
 Programming and Debugging
 *************************
 
-Applications for the ``ganymed-sk/sy120-gbm`` board can be
+Applications for the ``ganymed_sk/sy120_gbm`` board can be
 built, flashed, and debugged in the usual way. See
 :ref:`build_an_application` and :ref:`application_run` for more details on
 building and running.
