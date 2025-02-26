@@ -1,0 +1,11 @@
+# Copyright (c) 2026 sensry.io
+# SPDX-License-Identifier: Apache-2.0
+
+config ADC_ADS122C04
+	bool "Texas Instruments ADS122C04 ADC driver"
+	depends on DT_HAS_TI_ADS122C04_ENABLED
+	default y
+	select I2C
+	help
+	  Enable the driver implementation for the I2C based quad channel ADS122C04
+	  with 2 integrated IDACs.

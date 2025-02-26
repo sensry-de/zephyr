@@ -1,0 +1,34 @@
+# Copyright (c) 2026 The Zephyr Project Contributors
+# SPDX-License-Identifier: Apache-2.0
+
+description: Texas Instrument 24-Bit, 4-Channel, 2-kSPS, Delta-Sigma ADC, Dual-Matched Programmable Current Sources
+
+compatible: "ti,ads122c04"
+
+include: [adc-controller.yaml, i2c-device.yaml]
+
+properties:
+  reset-gpios:
+    type: phandle-array
+    description: "GPIO for reset"
+
+  drdy-gpios:
+    type: phandle-array
+    description: |
+      GPIO for data ready, becomes active when a conversion result is ready
+
+  idac-current:
+    type: int
+    enum:
+      - 0
+      - 10
+      - 50
+      - 100
+      - 250
+      - 500
+      - 1000
+      - 1500
+    default: 0
+    description: |
+      IDAC current in microampere, the default value turns the current source off
+
