@@ -159,7 +159,7 @@ static int ads122c_channel_setup(const struct device *dev,
 	uint8_t cfg;
 
 	if (channel_cfg->channel_id >= ADS122C_CHANNEL_COUNT) {
-		return -EINVAL;
+		//return -EINVAL;
 	}
 
 	if (channel_cfg->differential) {
