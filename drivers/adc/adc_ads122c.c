@@ -166,7 +166,12 @@ static int ads122c_channel_setup(const struct device *dev,
 
 	} else {
 		/* single ended */
+
+		/* config 0 */
 		cfg = ADS122C_MUX_SINGLE(channel_cfg->channel_id);
+		cfg = 0;
+		cfg |= (6 << 4); // AINP = AIN2, AINN = AIN3
+
 		cfg |= ADS122C_GAIN(ads122c_allowed_gain(channel_cfg->gain));
 		cfg &= ~BIT(ADS122C_CFG0_PGA_DISABLE_OFFS);
 
@@ -176,6 +181,7 @@ static int ads122c_channel_setup(const struct device *dev,
 			return -EINVAL;
 		}
 
+		/* config 1 */
 		cfg = 0;
 		cfg &= ~BIT(ADS122C_CFG1_CONTINUOUS_OFFS);
 
@@ -184,6 +190,27 @@ static int ads122c_channel_setup(const struct device *dev,
 			LOG_ERR("failed to configure reg %d", ADS122C_REG_CFG1);
 			return -EINVAL;
 		}
+
+		/* config 2 */
+		cfg = 0;
+		cfg |= 6;	// measurement current of 1mA
+
+		ret = ads122c_write_reg(dev, ADS122C_REG_CFG2, cfg);
+		if (ret) {
+			LOG_ERR("failed to configure reg %d", ADS122C_REG_CFG2);
+			return -EINVAL;
+		}
+
+		/* config 3 */
+		cfg = 0;
+		cfg |= (2 << 5);	// inject current into channel AIN1
+
+		ret = ads122c_write_reg(dev, ADS122C_REG_CFG3, cfg);
+		if (ret) {
+			LOG_ERR("failed to configure reg %d", ADS122C_REG_CFG3);
+			return -EINVAL;
+		}
+
 	}
 
 	return 0;
