@@ -170,10 +170,13 @@ static int ads122c_channel_setup(const struct device *dev,
 		/* config 0 */
 		cfg = ADS122C_MUX_SINGLE(channel_cfg->channel_id);
 		cfg = 0;
-		cfg |= (7 << 4); // AINP = AIN2, AINN = AIN3
+		// cfg |= (6 << 4); // AINP = AIN2, AINN = AIN3
+		cfg |= (7 << 4); // AINP = AIN3, AINN = AIN2
+		// cfg |= (0xa << 4); // AINP = AIN2, AINN = GND
 
 		cfg |= ADS122C_GAIN(ads122c_allowed_gain(channel_cfg->gain));
-		cfg &= ~BIT(ADS122C_CFG0_PGA_DISABLE_OFFS);
+		// cfg &= ~BIT(ADS122C_CFG0_PGA_DISABLE_OFFS);
+		cfg |= BIT(ADS122C_CFG0_PGA_DISABLE_OFFS);
 
 		ret = ads122c_write_reg(dev, ADS122C_REG_CFG0, cfg);
 		if (ret) {
@@ -183,6 +186,12 @@ static int ads122c_channel_setup(const struct device *dev,
 
 		/* config 1 */
 		cfg = 0;
+		//cfg |= (0x2 << 5); // 90 SPS
+		// cfg |= (0x5 << 5); // 600 SPS
+		cfg |= (0x6 << 5); // 1000 SPS
+
+		cfg |= (0x1 << 1); // reference REFP - REFN
+
 		cfg &= ~BIT(ADS122C_CFG1_CONTINUOUS_OFFS);
 
 		ret = ads122c_write_reg(dev, ADS122C_REG_CFG1, cfg);
@@ -194,6 +203,7 @@ static int ads122c_channel_setup(const struct device *dev,
 		/* config 2 */
 		cfg = 0;
 		cfg |= 6;	// measurement current of 1mA
+		//cfg |= 3;	// measurement current of 100uA
 
 		ret = ads122c_write_reg(dev, ADS122C_REG_CFG2, cfg);
 		if (ret) {
