@@ -170,7 +170,7 @@ static int ads122c_channel_setup(const struct device *dev,
 		/* config 0 */
 		cfg = ADS122C_MUX_SINGLE(channel_cfg->channel_id);
 		cfg = 0;
-		cfg |= (6 << 4); // AINP = AIN2, AINN = AIN3
+		cfg |= (7 << 4); // AINP = AIN2, AINN = AIN3
 
 		cfg |= ADS122C_GAIN(ads122c_allowed_gain(channel_cfg->gain));
 		cfg &= ~BIT(ADS122C_CFG0_PGA_DISABLE_OFFS);
