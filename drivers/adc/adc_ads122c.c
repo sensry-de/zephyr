@@ -176,7 +176,7 @@ static int ads122c_channel_setup(const struct device *dev,
 
 		cfg |= ADS122C_GAIN(ads122c_allowed_gain(channel_cfg->gain));
 		// cfg &= ~BIT(ADS122C_CFG0_PGA_DISABLE_OFFS);
-		cfg |= BIT(ADS122C_CFG0_PGA_DISABLE_OFFS);
+		//cfg |= BIT(ADS122C_CFG0_PGA_DISABLE_OFFS);
 
 		ret = ads122c_write_reg(dev, ADS122C_REG_CFG0, cfg);
 		if (ret) {
@@ -186,9 +186,9 @@ static int ads122c_channel_setup(const struct device *dev,
 
 		/* config 1 */
 		cfg = 0;
-		//cfg |= (0x2 << 5); // 90 SPS
+		cfg |= (0x2 << 5); // 90 SPS
 		// cfg |= (0x5 << 5); // 600 SPS
-		cfg |= (0x6 << 5); // 1000 SPS
+		//cfg |= (0x6 << 5); // 1000 SPS
 
 		cfg |= (0x1 << 1); // reference REFP - REFN
 
