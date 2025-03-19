@@ -190,7 +190,7 @@ static int ads122c_channel_setup(const struct device *dev,
 		//cfg |= (0x5 << 5); // 600 SPS
 		// cfg |= (0x6 << 5); // 1000 SPS
 
-		//cfg |= (0x1 << 1); // reference REFP - REFN
+		cfg |= (0x1 << 1); // reference REFP - REFN
 
 		cfg &= ~BIT(ADS122C_CFG1_CONTINUOUS_OFFS);
 
@@ -202,8 +202,9 @@ static int ads122c_channel_setup(const struct device *dev,
 
 		/* config 2 */
 		cfg = 0;
-		cfg |= 6;	// measurement current of 1mA
 		//cfg |= 3;	// measurement current of 100uA
+		cfg |= 6;	// measurement current of 1mA
+		//cfg |= 7;	// measurement current of 1.5mA
 
 		ret = ads122c_write_reg(dev, ADS122C_REG_CFG2, cfg);
 		if (ret) {
@@ -213,7 +214,7 @@ static int ads122c_channel_setup(const struct device *dev,
 
 		/* config 3 */
 		cfg = 0;
-		//cfg |= (2 << 5);	// inject current into channel AIN1
+		cfg |= (2 << 5);	// inject current into channel AIN1
 
 		ret = ads122c_write_reg(dev, ADS122C_REG_CFG3, cfg);
 		if (ret) {
