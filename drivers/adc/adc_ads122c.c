@@ -186,11 +186,11 @@ static int ads122c_channel_setup(const struct device *dev,
 
 		/* config 1 */
 		cfg = 0;
-		cfg |= (0x2 << 5); // 90 SPS
-		// cfg |= (0x5 << 5); // 600 SPS
-		//cfg |= (0x6 << 5); // 1000 SPS
+		//cfg |= (0x2 << 5); // 90 SPS
+		//cfg |= (0x5 << 5); // 600 SPS
+		// cfg |= (0x6 << 5); // 1000 SPS
 
-		cfg |= (0x1 << 1); // reference REFP - REFN
+		//cfg |= (0x1 << 1); // reference REFP - REFN
 
 		cfg &= ~BIT(ADS122C_CFG1_CONTINUOUS_OFFS);
 
@@ -213,7 +213,7 @@ static int ads122c_channel_setup(const struct device *dev,
 
 		/* config 3 */
 		cfg = 0;
-		cfg |= (2 << 5);	// inject current into channel AIN1
+		//cfg |= (2 << 5);	// inject current into channel AIN1
 
 		ret = ads122c_write_reg(dev, ADS122C_REG_CFG3, cfg);
 		if (ret) {
@@ -263,7 +263,13 @@ static int ads122c_read_sample(const struct device *dev, uint32_t *buff)
 		return ret;
 	}
 
-	*buff = sys_get_be24(sample);
+	uint32_t raw_value = sys_get_be24(sample);
+	if (raw_value & 0x00800000){
+		raw_value |= 0xff000000;
+	}
+
+	*buff = raw_value;
+
 	return 0;
 }
 
