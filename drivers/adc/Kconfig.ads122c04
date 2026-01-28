@@ -6,6 +6,22 @@ config ADC_ADS122C04
 	depends on DT_HAS_TI_ADS122C04_ENABLED
 	default y
 	select I2C
+	select ADC_CONFIGURABLE_INPUTS
 	help
 	  Enable the driver implementation for the I2C based quad channel ADS122C04
 	  with 2 integrated IDACs.
+
+config ADC_ADS122C04_ACQUISITION_THREAD_STACK_SIZE
+	int "Stack size for the ADC data acquisition thread"
+	depends on ADC_ADS122C04
+	default 384
+	help
+	  Size of the stack used for the internal data acquisition
+	  thread.
+
+config ADC_ADS122C04_ACQUISITION_THREAD_PRIO
+	int "Priority for the ADC data acquisition thread"
+	depends on ADC_ADS122C04
+	default 0
+	help
+	  Priority level for the internal ADC data acquisition thread.
