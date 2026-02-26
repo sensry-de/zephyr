@@ -30,19 +30,19 @@
 
 ## ROM AREA ##
 #define ROM_BASE        0x1C010100
-#define ROM_SIZE        0x5Fa00
+#define ROM_SIZE        0x6FF00
 
 ## RAM AREA ##
-#define RAM_BASE        0x1C070000
-#define RAM_SIZE        0x200000
+#define RAM_BASE        0x1C080000
+#define RAM_SIZE        0x390000
 
 MEMORY
     {
         L2_START  (rx)          : ORIGIN = 0x1c010000, LENGTH = 0x00000080
         L2_VALIDITY (rx)        : ORIGIN = 0x1c010080, LENGTH = 0x00000080
 
-        ROM (rx)                : ORIGIN = ROM_BASE,    LENGTH = ROM_SIZE       /*  392kb */
-        RAM (rwx)               : ORIGIN = RAM_BASE,    LENGTH = RAM_SIZE       /* 2097kb */
+        ROM (rx)                : ORIGIN = ROM_BASE,    LENGTH = ROM_SIZE       /*  458kb */
+        RAM (rwx)               : ORIGIN = RAM_BASE,    LENGTH = RAM_SIZE       /* 3735kb */
 
         L2_PRIV_CH0             : ORIGIN = 0x1c004100, LENGTH = 0x2000          /* uDMA access */
 
