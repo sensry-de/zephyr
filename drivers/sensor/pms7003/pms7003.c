@@ -19,6 +19,7 @@
 #include <zephyr/drivers/sensor.h>
 #include <stdlib.h>
 #include <string.h>
+#include <machine/endian.h>
 #include <zephyr/drivers/uart.h>
 #include <zephyr/logging/log.h>
 
@@ -154,6 +155,20 @@ static int pms7003_sample_fetch(const struct device *dev,
 	drv_data->pm_2_5_count = (pms7003_receive_buffer[20] << 8) + pms7003_receive_buffer[21];
 	drv_data->pm_5_0_count = (pms7003_receive_buffer[22] << 8) + pms7003_receive_buffer[23];
 	drv_data->pm_10_0_count = (pms7003_receive_buffer[24] << 8) + pms7003_receive_buffer[25];
+	/* check crc */
+	uint16_t crc = 0;
+	for (int i = 0; i < 2; i++) {
+		crc += pms7003_start_bytes[i];
+	}
+	for (int i = 0; i < 28; i++) {
+		crc += pms7003_receive_buffer[i];
+	}
+
+	uint16_t expected_crc = be16toh(*(uint16_t *)(&pms7003_receive_buffer[28]));
+
+	if (crc != expected_crc) {
+		LOG_WRN("crc error");
+	}
 
 	LOG_DBG("pm1.0_cf = %d", drv_data->pm_1_0_cf);
 	LOG_DBG("pm2.5_cf = %d", drv_data->pm_2_5_cf);
