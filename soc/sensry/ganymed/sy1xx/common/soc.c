@@ -27,9 +27,26 @@ LOG_MODULE_REGISTER(soc);
 #define SY1XX_ARCHI_ITC_FIFO_OFFSET       0x24
 #define SY1XX_ARCHI_ITC_IRQ_MASK          0x1f
 
+#define SY1XX_ARCHI_APB_SOC_CTRL_RSTEN_OFFSET           0x8
+#define SY1XX_ARCHI_APB_SOC_CTRL_SORTRIGGER_OFFSET      0x1C
+
+#define SY1XX_ARCHI_APB_SOC_CTRL_RSTEN_ADDR             (SY1XX_ARCHI_SYSCTRL_ADDR + SY1XX_ARCHI_APB_SOC_CTRL_RSTEN_OFFSET)
+#define SY1XX_ARCHI_APB_SOC_CTRL_SORTRIGGER_ADDR        (SY1XX_ARCHI_SYSCTRL_ADDR + SY1XX_ARCHI_APB_SOC_CTRL_SORTRIGGER_OFFSET)
+
+
 void sys_arch_reboot(int type)
 {
-	ARG_UNUSED(type);
+
+    ARG_UNUSED(type);
+
+    uint32_t rstctrl_rsten = sys_read32(SY1XX_ARCHI_APB_SOC_CTRL_RSTEN_ADDR);
+    uint32_t rstctrl_sortrigger = sys_read32(SY1XX_ARCHI_APB_SOC_CTRL_SORTRIGGER_ADDR);
+
+    // ena software reset
+    sys_write32(rstctrl_rsten | 0x1, SY1XX_ARCHI_APB_SOC_CTRL_RSTEN_ADDR);
+    // do reset
+    sys_write32(rstctrl_sortrigger | 1, SY1XX_ARCHI_APB_SOC_CTRL_SORTRIGGER_ADDR);
+
 }
 
 #define SY1XX_ARCHI_REF_CLOCK 32768

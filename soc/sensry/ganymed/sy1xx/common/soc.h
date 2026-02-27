@@ -37,6 +37,7 @@
 #define SY1XX_ARCHI_MRAM_EFUSE_ADDR       0x1D070100
 #define SY1XX_ARCHI_TSN_ADDR              0x1A120000
 #define SY1XX_ARCHI_CAN_ADDR              0x1A130000
+#define SY1XX_ARCHI_SYSCTRL_ADDR              0x1A140000
 
 uint32_t sy1xx_soc_get_rts_clock_frequency(void);
 uint32_t sy1xx_soc_get_peripheral_clock(void);
