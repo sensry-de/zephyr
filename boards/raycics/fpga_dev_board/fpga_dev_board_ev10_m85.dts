@@ -1,0 +1,17 @@
+/* Copyright (c) 2024 sensry.io */
+/* SPDX-License-Identifier: Apache-2.0 */
+
+/dts-v1/;
+
+#include <zephyr/dt-bindings/gpio/gpio.h>
+
+#include <raycics/ev10_m85.dtsi>
+
+/ {
+	chosen {
+		zephyr,sram = &sram0;
+/*
+		zephyr,console = &uart0;
+*/
+	};
+};

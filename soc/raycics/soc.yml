@@ -1,0 +1,12 @@
+# SPDX-FileCopyrightText: Copyright 2026 sensry.io
+# SPDX-License-Identifier: Apache-2.0
+
+family:
+  - name: edgevision
+    series:
+      - name: ev1x
+        socs:
+          - name: ev10
+            cpuclusters:
+              - name: m4
+              - name: m85

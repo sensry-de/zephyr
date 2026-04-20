@@ -1,0 +1,10 @@
+# SPDX-FileCopyrightText: Copyright 2026 sensry.io
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_FAMILY_EDGEVISION
+	bool
+
+config SOC_FAMILY
+	default "edgevision" if SOC_FAMILY_EDGEVISION
+
+rsource "*/Kconfig.soc"

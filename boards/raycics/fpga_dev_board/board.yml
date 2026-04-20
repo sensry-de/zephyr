@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: Copyright 2026 sensry.io
+# SPDX-License-Identifier: Apache-2.0
+
+board:
+  name: fpga_dev_board
+  full_name: EdgeVision EV10-FPGA-Board
+  vendor: raycics
+  socs:
+    - name: ev10
+      variants:
+      - name: m85
+        cpucluster: m85
+      - name: m4
+        cpucluster: m4

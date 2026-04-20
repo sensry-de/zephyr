@@ -1,0 +1,405 @@
+ENTRY &cpu &mode &app
+; &mode = startup,load
+; &app  = top_fpga_basic_cpu_test,i2c_test,spi_test,boot_test...
+
+local &user &user_prefix &user_local
+&user_local = OS.ENV(USERNAME)
+&user       = OS.ENV(USER_REMOTE)
+&user_prefix = OS.ENV(USER_REMOTE_PREFIX)
+if ("&user"==""&&"&user_prefix"=="")
+(
+    PRINT "ERROR: OS.ENV(USER_REMOTE) or OS.ENV(USER_REMOTE_PREFIX) has to be defined as environment variable -> open the windows environment settings and define USER_REMOTE to the <UserName> on your remote machine"
+)
+
+if ("&user_prefix"=="")
+(
+    &user_prefix="\\tsclient\C\cygwin64\home\&(user)\projects\s_edgevision"
+)
+PRINT "INFO: using user_prefix = &(user_prefix)"
+
+PRINT "INFO: ARGS cpu=&cpu mode=&mode app=&app"
+PRINT "INFO: do &(user_prefix)\s_edgevision_sw\ri_sw\mk\scripts\t32\edgevision.cmm armcm4|armcm85 startup|load <testcase>"
+PRINT "do &(user_prefix)\s_edgevision_sw\ri_sw\mk\scripts\t32\edgevision.cmm &cpu &mode &app"
+
+local &arm_axf &arm_axf_local &memacc &linemode
+local &M85_STATUS_CPUWAIT_REG
+&M85_STATUS_CPUWAIT_REG = 0x40001014
+&linemode = "/SingleLine"   ; /SingleLineAdjacent (default) - this generates the + (tree) symbol when doing HLL debugging
+
+local &cpu_id_addr &sram1_addr &M4ROM_BASE &M4IRAM_BASE &M85IRAM_BASE &tmpdir
+local &M4ROM_BASE &M4IRAM_BASE &M4IRAM_SIZE &M4DRAM_BASE &M4DRAM_SIZE &M85IRAM_BASE &M85IRAM_SIZE &M85DRAM_BASE &M85DRAM_SIZE
+&cpu_id_addr   = 0xe000ed00
+&sram1_addr    = 0x20100000
+&M4ROM_BASE    = 0x0
+&M4IRAM_BASE   = 0x02100000
+&M4IRAM_SIZE   = 0x00080000
+&M4DRAM_BASE   = 0x20500000
+&M4DRAM_SIZE   = 0x00040000
+&M85DRAM_BASE  = 0x20000000
+&M85DRAM_SIZE  = 0x00100000
+&M85IRAM_BASE  = 0x01000000
+&M85IRAM_SIZE  = 0x00100000
+&tmpdir = "C:\Tools\Temp"
+&arm_axf_local = "&(tmpdir)\&(user_local)_&(app).exe"
+
+; make -j V=0 FPGA_IMPL=true OPTIMIZE=0   // CFG="ri SIL EdgeVision1 FPGA"
+; &arm_axf = "&(user_prefix)\units\edgevision_top\source\tb\edgevision_top\tests\&(app)\sw\armcm4\out\bin\riSILEdgeVision1FPGA\ARMCM4.exe"
+if ("&cpu"=="armcm4")
+(
+    &arm_axf = "&(user_prefix)\s_edgevision_sw\ri_sw\fw\tests\&(app)\sw\armcm4\out\bin\riSILEdgeVision1FPGA\ARMCM4.exe"
+    if ("&app"=="rom")
+    (
+        &arm_axf = "&(user_prefix)\s_edgevision_sw\ri_sw\fw\apps\&(app)\out\bin\riSILEdgeVision1FPGA\ARMCM4_ROM.exe"
+    )
+    if ("&app"=="flash_array_write")
+    (
+        &arm_axf = "&(user_prefix)\s_edgevision_sw\ri_sw\fw\apps\&(app)\out\bin\riSILEdgeVision1FPGA\ARMCM4.exe"
+    )
+
+    &memacc = "e:"
+    ;&memacc = "eahb:"
+
+)
+else
+(
+    &arm_axf = "&(user_prefix)\s_edgevision_sw\ri_sw\fw\tests\&(app)\sw\armcm85\out\bin\riSILEdgeVision1FPGA\ARMCM85"
+    &memacc = "ezahb:"
+)
+; work on a local copy to speed up loading
+; COPY "&arm_axf" "&arm_axf_local"
+; &arm_axf = "&arm_axf_local"
+
+
+if ("&mode"=="startup")
+(
+    ; MENU extensions
+    MENU.ReSet         ; -- restore default menu
+    MENU.ReProgram
+    (&+   ; this makes the variables like &cpu visible
+
+        ADD
+        TOOLBAR
+        (
+            toolitem "Sys.Mode PREPARE / lowest level attach that already enables DAP access" "P,B"
+            (
+                SYSTEM.MODE PREPARE
+            )
+        )
+
+        ADD
+        TOOLBAR
+        (
+            toolitem "Sys.Mode DOWN / release the debugger so another debugger can connect" "DN,R"
+            (
+                SYSTEM.MODE DOWN
+            )
+        )
+
+        ADD
+        TOOLBAR
+        (
+            ;  SEPARATOR
+            toolitem "Sys.Mode Attach" "A,b"
+            (
+                SYSTEM.MODE ATTACH
+            )
+        )
+
+        ADD
+        TOOLBAR
+        (
+            toolitem "release CPUWAIT of Cortex-M85" "M85WAIT=0,b"
+            (
+                PRINT "INFO: release CPUWAIT of M85"
+                Data.Set EZAHB:&(M85_STATUS_CPUWAIT_REG) %LE %Long 0   ; WRITEREG(M85_STATUS_CPUWAIT_REG, 0)   --> this clear M85_REG__STATUS_CPUWAIT__CPUWAIT__M (BIT0)
+            )
+        )
+
+
+        ADD
+        TOOLBAR
+        (
+            toolitem "load program &(app)" "L,b"
+            (
+				PRINT "INFO: d.load.elf  &arm_axf  &memacc  &linemode"
+				d.load.elf "&arm_axf" &memacc &linemode
+            )
+        )
+
+        ADD
+        TOOLBAR
+        (
+            toolitem "load PeRipheral file" "PR,o"
+            (
+				PRINT "INFO: PER ..../edgevision_top_memmap_regs.per"
+                PER "&(user_prefix)\s_edgevision_sw\ri_sw\fw\driver\chip\edgevision\genout\icpeakrdl\edgevision_top_memmap_regs.per" /SpotLight
+            )
+        )
+
+        ADD
+        TOOLBAR
+        (
+            toolitem "M4 SWD select via Enter Dormant State" "M4,b"
+            (
+				PRINT "INFO: Select SWD of M4 via Enter Dormant State"
+				; GOSUB EnterDormant
+                JTAG.LOCK       ; prevent debugger from accessing SWD port
+                JTAG.PIN ENable ; enable output drivers
+                JTAG.SWD.SHIFT %long 0xFFFFFFFF %word 0xFFFF 1 1   ; send line reset : 50 SWCLKTCK cycles with SWDIOTMS HIGH
+                ;JTAG.SWD.SHIFT 0 0 1 1  1 1 0 1  1 1 0 0  0 1 1 1  ; the 16-bit SWD-to-DS select sequence : 0b0011_1101_1100_0111, MSB first
+                JTAG.SWD.SHIFT %word 0xE3BC                        ; the 16-bit SWD-to-DS select sequence : 0b0011_1101_1100_0111, MSB first
+                JTAG.UNLOCK     ; enable accesses from debugger to SWD port
+            )
+        )
+
+
+        ADD
+        TOOLBAR
+        (
+            toolitem "SWD: read CPUID &(cpu_id_addr)"  "CPUID,g"
+            (
+                &addr = &cpu_id_addr
+			    PRINT "INFO: read CPUID &(addr)"
+			    SYStem.mode   prepare
+                if ("&cpu"=="armcm85")
+				(
+                    Data.Set EDP:0xd00 %Long 0x03800052
+                    Data.Set EDP:0xd04 %Long &addr
+                    Data.In EDP:0xd0c /Long
+				)
+				else
+				(
+                    PRINT "INFO: read CPUID from CM4 not supported"
+				)
+            )
+        )
+
+        ADD
+        TOOLBAR
+        (
+            toolitem "&(cpu): ZERO out data and instruction memory"  "Z0,b"
+            (
+                if ("&cpu"=="armcm4")
+				(
+                    data.set &(M4DRAM_BASE)++(&(M4DRAM_SIZE)-1) %long 0x00000000
+                    data.set &(M4IRAM_BASE)++(&(M4IRAM_SIZE)-1) %long 0x00000000
+				)
+				else
+				(
+                    data.set &(M85DRAM_BASE)++(&(M85DRAM_SIZE)-1) %long 0x00000000
+                    data.set &(M85IRAM_BASE)++(&(M85IRAM_SIZE)-1) %long 0x00000000
+				)
+            )
+        )
+
+        ADD
+        TOOLBAR
+        (
+            toolitem "chip reset"  "RS,r"
+            (
+			    PRINT "INFO: ARGS2 cpu=&cpu mode=&mode app=&app"
+                PRINT "INFO: load reset code 0x8: jump 0x8 to Cortex-M4 and RESET the chip"
+
+                ; plain RESET to get the System in a defined state as we may have had bus errors
+                SYStem.mode   down                 ; necessary to avoid errors as soon as we do EnReset ON
+                SYStem.Option EnReset        ON
+                SYStem.RESetOut
+                SYStem.Option EnReset        OFF   ; The debugger must not use the RESET pin on the connector, as this also resets the DAP
+
+			    SYStem.mode   prepare
+                if ("&cpu"=="armcm4")
+				(
+                    PRINT "INFO: load default ROM for M4"
+			        SYStem.mode Attach   ; for some reason the DAP cannot write to ROM in case CPU is running
+                    break
+					d.set eahb:0x0         %long 0x2053FFF0 0x00000009 0x0000E7FE ; write '0x8: jump 0x8' as default code after reset
+				)
+				else
+				(
+                    PRINT "INFO: load default ROM for M85"
+                    SYStem.mode   down                 ; necessary to avoid errors as soon as we do EnReset ON
+                    SYStem.Option EnReset        ON
+                    SYStem.RESetOut
+                    SYStem.Option EnReset        OFF   ; The debugger must not use the RESET pin on the connector, as this also resets the DAP
+                    SYStem.mode   prepare
+					d.set ezahb:0x01000000 %long 0x200FFFF0 0x00000009 0x0000E7FE  ; write '0x8: jump 0x8' as default code after reset
+				)
+                SYStem.mode   down                 ; necessary to avoid errors as soon as we do EnReset ON
+                SYStem.Option EnReset        ON
+                SYStem.RESetOut
+                SYStem.Option EnReset        OFF   ; The debugger must not use the RESET pin on the connector, as this also resets the DAP
+                if ("&cpu"=="armcm85")
+                (
+                    PRINT "INFO: release CPUWAIT of M85"
+				    SYStem.mode   prepare
+                    Data.Set EZAHB:&(M85_STATUS_CPUWAIT_REG) %LE %Long 0   ; WRITEREG(M85_STATUS_CPUWAIT_REG, 0)   --> this clear M85_REG__STATUS_CPUWAIT__CPUWAIT__M (BIT0)
+                )
+                PRINT "INFO: RESET done"
+                SYSTEM.MODE Attach
+                ; now load the overwritten code again
+                if ("&cpu"=="armcm4")
+				(
+                ;    d.load.elf "&arm_axf" &(memacc)0x0++0xf /nosymbol &linemode
+				)
+				else
+				(
+                ;    d.load.elf "&arm_axf" &(memacc)0x01000000++0xf /nosymbol &linemode
+                )
+                break
+            )
+        )
+    )
+)
+
+
+if ("&mode"=="startup"||"&mode"=="connect")
+(
+   ; logging
+   ; log.close
+   ; log.open delme.log
+   ; log.on
+   ; log.type ; open window that shows all commands
+
+    RESet
+    WinCLEAR
+    B::           ; Select the ICD device prompt
+    System.Reset
+    ; RADIX.classic ; use decimal numbers as default
+    setup.var %FIXED %COMPACT %TREE %HEX %DECIMAL %spotlight
+
+    area
+
+    ; --------------------------------------------------------------------------------
+    ; initialize and start the debugger
+    SYStem.config DEBUGPORTTYPE SWD
+    SYStem.JtagClock CTCK 2000kHz  ; 500kHz 10MHz
+    if ("&cpu"=="armcm4")
+	(
+        PRINT "INFO: SYStem.CPU CortexM4F"
+        SYStem.CPU CortexM4F
+        SYStem.Option.DEBUGPORTOptions SWITCHTOSWD.NONE
+        GOSUB EnterDormant
+        ;SYStem.CONFIG.AHBAP1.Base DP:0x00000000
+		;SYStem.Option.DEBUGPORTOptions SWITCHTOSWD.JtagToDormantToSwd
+        ;SYStem.Option.DEBUGPORTOptions SWITCHTOSWD.DormantToSwd
+		;SYStem.CONFIG SWDPTARGETSEL 0
+        ;system.config swdp on
+	)
+	else
+	(
+        PRINT "INFO: SYStem.CPU CortexM85"
+        SYStem.CPU CortexM85  ; CPUID: 410FD232
+        SYStem.CONFIG.AHBAP1.Base DP:0x00000000
+		SYStem.Option.DEBUGPORTOptions SWITCHTOSWD.DormantToSwd
+		SYStem.CONFIG SWDPTARGETSEL 0xffffffff  ; TARGETSEL=BIT[23:0] of DPID:0x4c013477  NOTE: 0xc013477 and 0xffffffff both work
+	)
+    SYStem.Option DAPDBGPWRUPREQ AlwaysON
+    SYStem.Option SYSRESETREQ    ON
+    ; SYStem.Option VECTRESET      ON
+    SYStem.Option EnReset        OFF    ; The debugger must not use the RESET pin on the connector, as this also resets the DAP
+
+    SETUP.Var %SpotLight
+
+    SYSTEM.MODE PREPARE
+
+	; PER ~~\perdap.per
+    Register /SpotLight
+;    PER "&(user_prefix)\s_edgevision_sw\ri_sw\fw\driver\chip\edgevision\genout\icpeakrdl\edgevision_top_memmap_regs-test.per" /SpotLight
+;    PER "&(user_prefix)\s_edgevision_sw\ri_sw\fw\driver\chip\edgevision\genout\icpeakrdl\edgevision_top_memmap_regs.per" /SpotLight
+;    PER "&(user_prefix)\s_edgevision_sw\ri_sw\fw\driver\chip\edgevision\genout\icpeakrdl\edgevision_top_memmap_regs-846b1.per" /SpotLight
+;    PER "&(user_prefix)\s_edgevision_sw\ri_sw\fw\driver\chip\edgevision\genout\icpeakrdl\edgevision_top_memmap_regs-ae831.per" /SpotLight
+;    PER "&(user_prefix)\s_edgevision_sw\ri_sw\fw\driver\chip\edgevision\genout\icpeakrdl\edgevision_top_memmap_regs-823f.per" /SpotLight
+
+)
+
+if ("&mode"=="startup"||"&mode"=="load")
+(
+    if ("&cpu"=="armcm4")
+    (
+        SYSTEM.MODE attach
+        break
+        ;SYSTEM.MODE up
+        ;SYSTEM.MODE prepare
+    )
+    else
+    (
+        SYSTEM.MODE prepare
+    )
+    if ("&app"!="NONE")
+    (
+        PRINT "INFO: d.load.elf  &arm_axf  &memacc  &linemode"
+        d.load.elf "&arm_axf" &memacc &linemode
+    )
+    d.dump &(memacc)0x20100000
+    d.dump &(memacc)0x20200000
+)
+
+
+if ("&mode"=="startup")
+(
+    ; The following SourcePATH translation is necessary when compiling and debugging is done on different filesystems (different machines)
+    sYmbol.SourcePATH.Translate "C:\cygwin64\home" "\\tsclient\C\cygwin64\home"
+    sYmbol.SourcePATH.Translate "/home/tswaehn/src/raycics/" "\\tsclient\_home_tswaehn_src_raycics_"
+    sYmbol.List.MAP   ; check what was loaded
+
+    if ("&cpu"=="armcm85")
+    (
+       ; start M85
+       Data.Set EZAHB:0x40001014 %LE %Long 0   ; WRITEREG(M85_STATUS_CPUWAIT_REG, 0)   --> this clear M85_REG__STATUS_CPUWAIT__CPUWAIT__M (BIT0)
+    )
+    SYSTEM.MODE Attach
+    break
+    Register /SpotLight
+
+    ; The M85 was loaded in PREPARE mode. i.e after stopping the M85 (break), the PC is not at the Reset_Handler position'
+    ; we correct this by loading just the symbols of the program /nocode and set the PC according to the loaded image /registers
+    if ("&app"!="NONE")
+    (
+        d.load.elf "&arm_axf" &memacc /nocode /register &linemode
+    )
+
+    ; PER C:\cygwin64\home\&(user)\projects\s_hellboy\units\ri_sw\fw\driver\chip\hellboy\v10\ri_hellboy_v10_regs.per /SpotLight
+
+    ;break.set main
+
+    data.list
+    mode.hll    ; show only c-code
+)
+ENDDO
+
+EnterDormant:
+(
+    ; 1. Send at least 50 SWCLKTCK cycles with SWDIOTMS HIGH. This sequence ensures that the SWD interface is in the reset state.
+    ;    The target only detects the SWD-to-DS sequence when it is in the reset state.
+    ; 2. Send the 16-bit SWD-to-DS select sequence on SWDIOTMS.
+    ;    The 16-bit SWD-to-DS select sequence is 0b0011_1101_1100_0111, MSB first.
+    PRINT "INFO: EnterDormant"
+    JTAG.LOCK       ; prevent debugger from accessing SWD port
+    JTAG.PIN ENable ; enable output drivers
+    JTAG.SWD.SHIFT %long 0xFFFFFFFF %word 0xFFFF 1 1   ; send line reset : 50 SWCLKTCK cycles with SWDIOTMS HIGH
+    JTAG.SWD.SHIFT 0 0 1 1  1 1 0 1  1 1 0 0  0 1 1 1  ; the 16-bit SWD-to-DS select sequence : 0b0011_1101_1100_0111, MSB first / 0x3DC7 transmitted MSB first, 0xE3BC LSB first
+    JTAG.UNLOCK     ; enable accesses from debugger to SWD port
+    RETURN
+)
+
+delme_ShiftJTAG2SWD:
+(
+    JTAG.SWD.SHIFT %long 0xFFFFFFFF %byte 0xFF %byte 0xFF %byte 0x7B %byte 0x9E %byte 0xFF %byte 0xFF %long 0xFFFFFFFF %byte 0x0F 0 0 0 0
+    RETURN
+)
+
+; The recommended 31-bit JTAG-to-DS select sequence is 0b010_1110_1110_1110_1110_1110_1110_0110, MSB first.
+; This sequence can be represented as either:
+; • 0x2EEEEEE6 transmitted MSB first, that is, starting from bit 30.
+; • 0x33BBBBBA transmitted LSB first.
+
+
+; B5.3.3 Switching from SWD to dormant state
+; To switch from SWD to dormant state:
+; 1. Send at least 50 SWCLKTCK cycles with SWDIOTMS HIGH. This sequence ensures that the SWD
+; interface is in the reset state. The target only detects the SWD-to-DS sequence when it is in the reset state.
+; 2. Send the 16-bit SWD-to-DS select sequence on SWDIOTMS.
+; The 16-bit SWD-to-DS select sequence is 0b0011_1101_1100_0111, MSB first. This sequence can be represented
+; as either:
+; • 0x3DC7 transmitted MSB first.
+; • 0xE3BC transmitted LSB first

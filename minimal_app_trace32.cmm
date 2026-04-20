@@ -1,0 +1,185 @@
+ENTRY &cpu &mode &app
+; &cpu  = armcm85
+; &mode = startup|load
+; &app  = zephyr
+
+local &user_prefix &zephyr_elf &memacc &linemode
+&user_prefix = OS.ENV(USER_REMOTE_PREFIX)
+if ("&user_prefix"=="")
+(
+    PRINT "ERROR: OS.ENV(USER_REMOTE_PREFIX) has to be defined"
+)
+
+&memacc = "ezahb:"
+&linemode = "/SingleLine"
+
+PRINT "INFO: args cpu=&cpu mode=&mode app=&app"
+PRINT "INFO: using user_prefix = &(user_prefix)"
+sYmbol.SourcePATH.Translate "/home/tswaehn/.local/zephyrproject-latest/zephyr" "\\tsclient\_home_tswaehn_src_raycics_\zephyr"
+&zephyr_elf = "&(user_prefix)/zephyr/build/zephyr/minimal_app.elf"
+
+if ("&cpu"!="armcm85")
+(
+    PRINT "ERROR: this script only supports armcm85"
+)
+
+if ("&mode"=="startup")
+(
+    MENU.ReSet
+    MENU.ReProgram
+    (&+
+        ADD
+        TOOLBAR
+        (
+            toolitem "Sys.Mode PREPARE" "P,B"
+            (
+                SYStem.Mode PREPARE
+            )
+        )
+
+        ADD
+        TOOLBAR
+        (
+            toolitem "Sys.Mode DOWN" "DN,R"
+            (
+                SYStem.Mode DOWN
+            )
+        )
+
+        ADD
+        TOOLBAR
+        (
+            toolitem "Sys.Mode Attach" "A,b"
+            (
+                SYStem.Mode ATTACH
+            )
+        )
+
+        ADD
+        TOOLBAR
+        (
+            toolitem "release CPUWAIT of Cortex-M85" "M85WAIT=0,b"
+            (
+                PRINT "INFO: release CPUWAIT of M85"
+                Data.Set EZAHB:0x40001014 %LE %Long 0
+            )
+        )
+
+        ADD
+        TOOLBAR
+        (
+            toolitem "load program zephyr" "L,b"
+            (
+                PRINT "INFO: d.load.elf &(zephyr_elf) &memacc &linemode"
+                d.load.elf "&zephyr_elf" &memacc &linemode
+            )
+        )
+
+        ADD
+        TOOLBAR
+        (
+            toolitem "&(cpu): ZERO out data and instruction memory" "Z0,b"
+            (
+                data.set 0x01000000++0xFFFFF %long 0x00000000
+            )
+        )
+
+        ADD
+        TOOLBAR
+        (
+            toolitem "chip reset" "RS,r"
+            (
+                PRINT "INFO: reset chip and release M85"
+                SYStem.mode down
+                SYStem.Option EnReset ON
+                SYStem.RESetOut
+                SYStem.Option EnReset OFF
+                SYStem.Mode PREPARE
+                Data.Set EZAHB:0x40001014 %LE %Long 0
+            )
+        )
+
+        ADD
+        TOOLBAR
+        (
+            toolitem "run to reset vector" "RV,b"
+            (
+                Break.Set 0x01000911
+                Go
+            )
+        )
+
+        ADD
+        TOOLBAR
+        (
+            toolitem "run to main" "G,b"
+            (
+                Break.Set main
+                Go
+            )
+        )
+    )
+)
+
+if ("&mode"=="startup")
+(
+    PRINT "INFO: preparing CortexM85"
+    SYStem.CONFIG DEBUGPORTTYPE SWD
+    SYStem.JtagClock CTCK 2000kHz
+    SYStem.CPU CortexM85
+    SYStem.CONFIG.AHBAP1.Base DP:0x00000000
+    SYStem.Option.DEBUGPORTOptions SWITCHTOSWD.DormantToSwd
+    SYStem.CONFIG SWDPTARGETSEL 0xffffffff
+    SYStem.Option DAPDBGPWRUPREQ AlwaysON
+    SYStem.Option SYSRESETREQ ON
+    SYStem.Option EnReset OFF
+    SYStem.Mode PREPARE
+    ; release the M85 core so TRACE32 sees the right CPU
+    Data.Set EZAHB:0x40001014 %LE %Long 0
+
+    PRINT "INFO: d.load.elf &(zephyr_elf) &memacc &linemode"
+    d.load.elf "&zephyr_elf" &memacc &linemode
+    SYSTEM.MODE Attach
+    break
+    Register /SpotLight
+    PRINT "INFO: PER ./minimal_app.per"
+    PER "minimal_app.per" /SpotLight
+    d.load.elf "&zephyr_elf" &memacc /nocode /register &linemode
+    WinCLEAR
+    setup.var %FIXED %COMPACT %TREE %HEX %DECIMAL %spotlight
+    area
+    Register /SpotLight
+    data.list
+    mode.hll
+    PRINT "finished loading"
+)
+else if ("&mode"=="load")
+(
+    PRINT "INFO: preparing CortexM85"
+    SYStem.CONFIG DEBUGPORTTYPE SWD
+    SYStem.JtagClock CTCK 2000kHz
+    SYStem.CPU CortexM85
+    SYStem.CONFIG.AHBAP1.Base DP:0x00000000
+    SYStem.Option.DEBUGPORTOptions SWITCHTOSWD.DormantToSwd
+    SYStem.CONFIG SWDPTARGETSEL 0xffffffff
+    SYStem.Option DAPDBGPWRUPREQ AlwaysON
+    SYStem.Option SYSRESETREQ ON
+    SYStem.Option EnReset OFF
+    SYStem.Mode PREPARE
+
+    PRINT "INFO: d.load.elf &(zephyr_elf) &memacc &linemode"
+    d.load.elf "&zephyr_elf" &memacc &linemode
+    SYSTEM.MODE Attach
+    break
+    Register /SpotLight
+    PRINT "INFO: PER ./minimal_app.per"
+    PER "minimal_app.per" /SpotLight
+    d.load.elf "&zephyr_elf" &memacc /nocode /register &linemode
+    WinCLEAR
+    setup.var %FIXED %COMPACT %TREE %HEX %DECIMAL %spotlight
+    area
+    Register /SpotLight
+    data.list
+    mode.hll
+    PRINT "finished loading"
+)
