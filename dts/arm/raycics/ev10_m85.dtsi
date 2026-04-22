@@ -9,6 +9,12 @@
 #include <freq.h>
 
 / {
+	sysclk: system-clock {
+		compatible = "fixed-clock";
+		clock-frequency = <DT_FREQ_M(40)>;
+		#clock-cells = <0>;
+	};
+
 	cpus {
 		#address-cells = <1>;
 		#size-cells = <0>;
@@ -32,6 +38,14 @@
 	};
 
 	soc {
+		uart0: uart@40048000 {
+			compatible = "arm,cmsdk-uart";
+			reg = <0x40048000 0x1000>;
+			interrupts = <0 3>;
+			clocks = <&sysclk &sysclk>;
+			current-speed = <921600>;
+			status = "okay";
+		};
 
 		sram0: memory@1000000 {
 			compatible = "mmio-sram";
