@@ -1,0 +1,42 @@
+# Copyright (c) 2026 sensry.io
+# SPDX-License-Identifier: Apache-2.0
+
+config VIDEO_HEIMANN_HTPA
+	bool "Enable Heimann HTPA IR camera"
+	depends on DT_HAS_HEIMANN_HTPA_160X120_ENABLED || DT_HAS_HEIMANN_HTPA_120X84_ENABLED
+    select SPI
+    select SPI_SAM_DMA
+    select DMA
+    select FLASH
+	default y
+	help
+	  Enable driver for Heimann HTPA IR camera device, based on - Thermopile Infrared Array Sensors,
+	  with integrated flash memory that holds temperature calibration and compensation data.
+
+if VIDEO_HEIMANN_HTPA
+
+config VIDEO_HM_HTPA_WORKER_STACK_SIZE
+	int "HTPA worker thread stack size"
+	default 1024
+	help
+	  Stack size for the background worker that produces mock frames.
+
+config VIDEO_HM_HTPA_WORKER_PRIORITY
+	int "HTPA worker thread priority"
+	default 5
+	help
+	  Priority for the background worker thread.
+
+config VIDEO_HM_HTPA_GRAB_STACK_SIZE
+	int "HTPA sensor grab thread stack size"
+	default 1024
+	help
+	  Stack size for the thread that continuously acquires sensor frames.
+
+config VIDEO_HM_HTPA_GRAB_PRIORITY
+	int "HTPA sensor grab thread priority"
+	default 4
+	help
+	  Priority for the sensor acquisition thread.
+
+endif # VIDEO_HEIMANN_HTPA
