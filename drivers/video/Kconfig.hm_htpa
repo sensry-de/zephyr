@@ -1,0 +1,10 @@
+# Copyright (c) 2026 sensry.io
+# SPDX-License-Identifier: Apache-2.0
+
+config VIDEO_HM_HTPA
+	bool "Enable Heimann HTPA IR camera"
+	select SPI
+	depends on DT_HAS_HEIMANN_HTPA_ENABLED
+	default y
+	help
+	  Enable driver for Heimann HTPA IR camera device, based on - Thermopile Infrared Array Sensors.
