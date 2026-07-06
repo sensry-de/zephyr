@@ -603,6 +603,7 @@ qorvo	Qorvo, Inc.
 qst	QST Corporation
 quectel	Quectel Wireless Solutions Co., Ltd.
 quicklogic	QuickLogic Corp.
+racyics	Raycics GmbH
 radxa	Radxa
 raidsonic	RaidSonic Technology GmbH
 rakwireless	RAKwireless Technology Limited
