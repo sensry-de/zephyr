@@ -32,6 +32,7 @@
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash0;
 		zephyr,code-partition = &slot0_partition;
+		zephyr,camera = &video_sw_generator;
 	};
 
 	extsram0: memory@60000000 {
@@ -121,6 +122,10 @@
 			};
 		};
 	};
+
+	video_sw_generator: video-sw-generator {
+		compatible = "zephyr,video-sw-generator";
+	};
 };
 
 &cpu0 {
@@ -171,5 +176,9 @@
 };
 
 &pioc {
+	status = "okay";
+};
+
+zephyr_udc0: &usbhs {
 	status = "okay";
 };
