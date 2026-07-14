@@ -31,7 +31,7 @@
 		zephyr,shell-uart = &uart0;
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash0;
-		zephyr,code-partition = &slot0_partition;
+		/*zephyr,code-partition = &slot0_partition;*/
 	};
 
 	extsram0: memory@60000000 {
