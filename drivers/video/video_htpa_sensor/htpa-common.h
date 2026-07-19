@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_COMMON_HTPA_COMMON_H_
-#define ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_COMMON_HTPA_COMMON_H_
+#ifndef ZEPHYR_DRIVERS_VIDEO_VIDEO_HTPA_SENSOR_HTPA_COMMON_H_
+#define ZEPHYR_DRIVERS_VIDEO_VIDEO_HTPA_SENSOR_HTPA_COMMON_H_
 
 #include <zephyr/drivers/spi.h>
 #include <zephyr/drivers/video.h>
@@ -93,4 +93,4 @@ struct hm_htpa_data {
 int hm_htpa_init(const struct device *dev);
 extern const struct video_driver_api hm_htpa_api;
 
-#endif /* ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_COMMON_HTPA_COMMON_H_ */
+#endif /* ZEPHYR_DRIVERS_VIDEO_VIDEO_HTPA_SENSOR_HTPA_COMMON_H_ */

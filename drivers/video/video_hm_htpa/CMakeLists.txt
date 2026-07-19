@@ -2,11 +2,15 @@
 # SPDX-License-Identifier: Apache-2.0
 
 if(CONFIG_VIDEO_HEIMANN_HTPA)
+  zephyr_library_include_directories(
+    common
+    ./
+  )
   zephyr_library_sources(
     common/htpa-calib.c
-    common/htpa-common.c
     common/htpa-proc.c
     common/htpa-sens.c
+    htpa-common.c
   )
   zephyr_library_sources_ifdef(CONFIG_DT_HAS_HEIMANN_HTPA_160X120_ENABLED  htpa-160x120.c)
   zephyr_library_sources_ifdef(CONFIG_DT_HAS_HEIMANN_HTPA_120X84_ENABLED  htpa-120x84.c)

@@ -9,7 +9,7 @@ LOG_MODULE_REGISTER(htpa_160x120, CONFIG_VIDEO_LOG_LEVEL);
 
 #define DT_DRV_COMPAT heimann_htpa_160x120
 
-#include "common/htpa-common.h"
+#include "htpa-common.h"
 
 #define HTPA_DEFAULT_ACQUISITION_TIME_USEC 1000
 
