@@ -16,7 +16,7 @@
 
 LOG_MODULE_REGISTER(htpa, CONFIG_VIDEO_LOG_LEVEL);
 
-#include "htpa-common.h"
+#include "video_htpa_sensor.h"
 
 /* Configuration register (write only). */
 #define CONFIGURATION_REGISTER 0x01

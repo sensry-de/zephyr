@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_COMMON_HTPA_CALIB_H_
-#define ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_COMMON_HTPA_CALIB_H_
+#ifndef ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_VIDEO_HTPA_CALIB_H_
+#define ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_VIDEO_HTPA_CALIB_H_
 
 #include <stdint.h>
 
@@ -26,4 +26,4 @@ typedef struct {
 
 int htpa_read_calibration(const struct device *dev, heimann_calibration_t *calib);
 
-#endif /* ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_COMMON_HTPA_CALIB_H_ */
+#endif /* ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_VIDEO_HTPA_CALIB_H_ */

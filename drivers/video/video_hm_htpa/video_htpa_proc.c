@@ -8,8 +8,8 @@
 
 #include <zephyr/sys/util.h>
 
-#include "htpa-common.h"
-#include "htpa-proc.h"
+#include "video_htpa_sensor.h"
+#include "video_htpa_proc.h"
 
 #define HTPA_AUTOSCALE_CLIP_PERCENT 1U
 

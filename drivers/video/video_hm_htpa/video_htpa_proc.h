@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_COMMON_HTPA_PROC_H_
-#define ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_COMMON_HTPA_PROC_H_
+#ifndef ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_VIDEO_HTPA_PROC_H_
+#define ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_VIDEO_HTPA_PROC_H_
 
 #define HTPA_HISTOGRAM_BIN_COUNT 256U
 
@@ -25,4 +25,4 @@ struct video_buffer;
  */
 int htpa_consume_frame(const struct device *dev, struct video_buffer *vbuf);
 
-#endif /* ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_COMMON_HTPA_PROC_H_ */
+#endif /* ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_VIDEO_HTPA_PROC_H_ */

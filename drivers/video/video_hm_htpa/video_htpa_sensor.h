@@ -4,15 +4,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_HTPA_COMMON_H_
-#define ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_HTPA_COMMON_H_
+#ifndef ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_VIDEO_HTPA_SENSOR_H_
+#define ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_VIDEO_HTPA_SENSOR_H_
 
 #include <zephyr/drivers/spi.h>
 #include <zephyr/drivers/video.h>
 #include <zephyr/kernel.h>
 
-#include "htpa-calib.h"
-#include "htpa-proc.h"
+#include "video_htpa_calib.h"
+#include "video_htpa_proc.h"
 
 struct htpa_sensor_config {
 	uint16_t width;
@@ -92,4 +92,4 @@ struct htpa_data {
 #endif
 };
 
-#endif /* ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_HTPA_COMMON_H_ */
+#endif /* ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_VIDEO_HTPA_SENSOR_H_ */
