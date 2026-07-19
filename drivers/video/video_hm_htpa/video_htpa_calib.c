@@ -14,9 +14,9 @@ LOG_MODULE_REGISTER(htpa_calib, CONFIG_VIDEO_LOG_LEVEL);
 
 #include "zephyr/drivers/flash.h"
 
-#define read_EEPROM(reg) read_flash_bytewise(dev, reg)
+#define read_EEPROM(reg) htpa_flash_read_bytewise(dev, reg)
 
-static uint8_t read_flash_bytewise(const struct device *dev, unsigned int address)
+static uint8_t htpa_flash_read_bytewise(const struct device *dev, unsigned int address)
 {
 	const struct htpa_config *cfg = dev->config;
 	struct htpa_data *data = dev->data;
@@ -38,7 +38,7 @@ static uint8_t read_flash_bytewise(const struct device *dev, unsigned int addres
  * Read a small subset of the sensor calibration data, which is typically much larger.
  * This will be extended as more processing is added.
  */
-int htpa_read_calibration(const struct device *dev, struct htpa_calib *calib)
+int htpa_flash_read_calibration(const struct device *dev, struct htpa_calib *calib)
 {
 	const struct htpa_config *cfg = dev->config;
 	const struct htpa_sensor_config *sensor = cfg->sensor;

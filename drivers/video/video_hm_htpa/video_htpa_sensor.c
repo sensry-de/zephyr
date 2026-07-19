@@ -604,7 +604,7 @@ static int hm_htpa_init(const struct device *dev)
 		return -ENODEV;
 	}
 
-	if (0 != htpa_read_calibration(dev, &data->calib)) {
+	if (0 != htpa_flash_read_calibration(dev, &data->calib)) {
 		LOG_ERR("Error reading calibration data");
 		return -EINVAL;
 	}

@@ -24,6 +24,6 @@ struct htpa_calib{
 	uint32_t id;
 };
 
-int htpa_read_calibration(const struct device *dev, struct htpa_calib *calib);
+int htpa_flash_read_calibration(const struct device *dev, struct htpa_calib *calib);
 
 #endif /* ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_VIDEO_HTPA_CALIB_H_ */
