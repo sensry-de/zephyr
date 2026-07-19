@@ -52,7 +52,7 @@ static const struct video_format_cap hm_htpa_caps_160x120[] = {{
 						       },
 						       {0}};
 
-#define HM_HTPA_INIT(inst)                                                                         \
+#define HM_HTPA_INIT_160X120(inst)                                                                 \
 	static int16_t __aligned(4) hm_htpa_pixels_##inst[HTPA_FRAME_QUEUE_SIZE]                   \
 				 [HTPA_WIDTH_160X120 * HTPA_HEIGHT_160X120];                     \
 	static uint8_t __aligned(4)                                                               \
@@ -86,4 +86,4 @@ static const struct video_format_cap hm_htpa_caps_160x120[] = {{
 	DEVICE_DT_INST_DEFINE(inst, hm_htpa_init, NULL, &hm_htpa_data_##inst, &hm_htpa_cfg_##inst, \
 			      POST_KERNEL, CONFIG_VIDEO_INIT_PRIORITY, &hm_htpa_api);
 
-DT_INST_FOREACH_STATUS_OKAY(HM_HTPA_INIT)
+DT_INST_FOREACH_STATUS_OKAY(HM_HTPA_INIT_160X120)
