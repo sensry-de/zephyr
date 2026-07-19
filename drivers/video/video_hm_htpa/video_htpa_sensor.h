@@ -35,41 +35,41 @@ struct htpa_sensor_config {
 	uint16_t pixels_per_block;
 	uint16_t block_length;
 	uint16_t data_offset;
-	uint32_t e_pixcmin[4];
-	uint32_t e_pixcmax[4];
-	uint32_t e_gradscale;
-	uint32_t e_tablenumber[2];
-	uint32_t e_epsilon;
-	uint32_t e_id[4];
-	uint32_t e_mbit_calib;
-	uint32_t e_bias_calib;
-	uint32_t e_clk_calib;
-	uint32_t e_bpa_calib;
-	uint32_t e_pu_calib;
-	uint32_t e_arraytype;
-	uint32_t e_vddth1[2];
-	uint32_t e_vddth2[2];
-	uint32_t e_ptatgr[4];
-	uint32_t e_ptatoff[4];
-	uint32_t e_ptatth1[2];
-	uint32_t e_ptatth2[2];
-	uint32_t e_vddscgrad;
-	uint32_t e_vddscoff;
-	uint32_t e_globaloff;
-	uint32_t e_globalgain[2];
-	uint32_t e_mbit_user;
-	uint32_t e_bias_user;
-	uint32_t e_clk_user;
-	uint32_t e_bpa_user;
-	uint32_t e_pu_user;
-	uint32_t e_nrofdefpix;
-	uint32_t e_deadpixadr;
-	uint32_t e_deadpixmask;
-	uint32_t e_vddcompgrad;
-	uint32_t e_vddcompoff;
-	uint32_t e_thgrad;
-	uint32_t e_thoffset;
-	uint32_t e_pij;
+	uint32_t e_offs_pixcmin[4];     /* Minimum PixC (float) */
+	uint32_t e_offs_pixcmax[4];     /* Maximum PixC (float) */
+	uint32_t e_offs_gradscale;      /* PTAT compensation scale */
+	uint32_t e_offs_tablenumber[2]; /* Table number (uint16) */
+	uint32_t e_offs_epsilon;        /* Emissivity percent */
+	uint32_t e_offs_id[4];          /* Sensor ID (uint32) */
+	uint32_t e_offs_mbit_calib;     /* Trim register 1 calibration */
+	uint32_t e_offs_bias_calib;     /* Trim registers 2/3 calibration */
+	uint32_t e_offs_clk_calib;      /* Trim register 4 calibration */
+	uint32_t e_offs_bpa_calib;      /* Trim registers 5/6 calibration */
+	uint32_t e_offs_pu_calib;       /* Trim register 7 calibration */
+	uint32_t e_offs_arraytype;      /* Sensor array type */
+	uint32_t e_offs_vddth1[2];      /* HS VDD threshold 1 */
+	uint32_t e_offs_vddth2[2];      /* HS VDD threshold 2 */
+	uint32_t e_offs_ptatgr[4];      /* PTAT gradient (float) */
+	uint32_t e_offs_ptatoff[4];     /* PTAT offset (float) */
+	uint32_t e_offs_ptatth1[2];     /* HS PTAT threshold 1 */
+	uint32_t e_offs_ptatth2[2];     /* HS PTAT threshold 2 */
+	uint32_t e_offs_vddscgrad;      /* HS VDD scale gradient */
+	uint32_t e_offs_vddscoff;       /* HS VDD scale offset */
+	uint32_t e_offs_globaloff;      /* Global offset (int8) */
+	uint32_t e_offs_globalgain[2];  /* Global gain (uint16) */
+	uint32_t e_offs_mbit_user;      /* Trim register 1 user value */
+	uint32_t e_offs_bias_user;      /* Trim registers 2/3 user value */
+	uint32_t e_offs_clk_user;       /* Trim register 4 user value */
+	uint32_t e_offs_bpa_user;       /* Trim registers 5/6 user value */
+	uint32_t e_offs_pu_user;        /* Trim register 7 user value */
+	uint32_t e_offs_nrofdefpix;     /* Defective pixel count */
+	uint32_t e_offs_deadpixadr;     /* Dead pixel address table */
+	uint32_t e_offs_deadpixmask;    /* Dead pixel mask table */
+	uint32_t e_offs_vddcompgrad;    /* VDD compensation gradient */
+	uint32_t e_offs_vddcompoff;     /* VDD compensation offset */
+	uint32_t e_offs_thgrad;         /* Thermal gradient table */
+	uint32_t e_offs_thoffset;       /* Thermal offset table */
+	uint32_t e_offs_pij;            /* Pixel constants (PixC) */
 };
 
 struct htpa_config {
