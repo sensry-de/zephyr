@@ -147,8 +147,8 @@ static uint16_t htpa_clamp_pixel(float pixel)
 	return (uint16_t)pixel;
 }
 
-static void htpa_scale_frame(const struct htpa_sensor_config *sensor, struct htpa_data *data,
-			     const struct video_buffer *frame, struct video_buffer *vbuf)
+void htpa_process_frame(const struct htpa_sensor_config *sensor, struct htpa_data *data,
+			const struct video_buffer *frame, struct video_buffer *vbuf)
 {
 	const int16_t *pixels = (const int16_t *)frame->buffer;
 	uint16_t *output = (uint16_t *)vbuf->buffer;
@@ -177,40 +177,4 @@ static void htpa_scale_frame(const struct htpa_sensor_config *sensor, struct htp
 	}
 
 	vbuf->bytesused = sensor->width * sensor->height * sizeof(*output);
-}
-
-int htpa_consume_frame(const struct device *dev, struct video_buffer *vbuf)
-{
-	const struct htpa_config *cfg = dev->config;
-	struct htpa_data *data = dev->data;
-	struct video_buffer *frame;
-	int64_t deadline;
-	int ret;
-
-	deadline = k_uptime_get() + HTPA_FRAME_TIMEOUT_MS(cfg->sensor->block_count);
-	do {
-		if (atomic_get(&data->in_flight_canceled)) {
-			return -ECANCELED;
-		}
-
-		frame = k_fifo_get(&data->grab.frame_ready_queue, K_MSEC(10));
-	} while (frame == NULL && k_uptime_get() < deadline);
-
-	if (frame == NULL) {
-		return -ETIMEDOUT;
-	}
-	if (atomic_get(&data->in_flight_canceled)) {
-		k_fifo_put(&data->grab.frame_free_queue, frame);
-		return -ECANCELED;
-	}
-
-	ret = data->grab.frame_results[frame->index];
-	if (ret == 0) {
-		htpa_scale_frame(cfg->sensor, data, frame, vbuf);
-		vbuf->timestamp = k_uptime_get_32();
-	}
-
-	k_fifo_put(&data->grab.frame_free_queue, frame);
-
-	return ret;
 }
