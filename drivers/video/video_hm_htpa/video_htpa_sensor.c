@@ -250,11 +250,18 @@ static int htpa_sens_wakeup(const struct device *dev)
 
 static void htpa_grab_init_mem(const struct device *dev)
 {
+	const struct htpa_config *cfg = dev->config;
 	struct htpa_data *data = dev->data;
+	const size_t pixel_count = cfg->sensor->width * cfg->sensor->height;
 
 	k_fifo_init(&data->grab.frame_free_queue);
 	k_fifo_init(&data->grab.frame_ready_queue);
 	for (size_t i = 0; i < ARRAY_SIZE(data->grab.frames); i++) {
+		data->grab.frames[i].index = i;
+		data->grab.frames[i].size = pixel_count * sizeof(int16_t);
+		data->grab.frames[i].buffer = (uint8_t *)&data->grab.frame_pixels[i * pixel_count];
+		data->grab.frames[i].bytesused = data->grab.frames[i].size;
+		data->grab.frames[i].type = VIDEO_BUF_TYPE_OUTPUT;
 		k_fifo_put(&data->grab.frame_free_queue, &data->grab.frames[i]);
 	}
 }
@@ -343,11 +350,12 @@ static int htpa_grab_image(const struct device *dev)
 	return 0;
 }
 
-static void htpa_grab_sort_pixels(const struct device *dev, struct htpa_grabbed_frame *frame)
+static void htpa_grab_sort_pixels(const struct device *dev, struct video_buffer *frame)
 {
 	const struct htpa_config *cfg = dev->config;
 	const struct htpa_sensor_config *sensor = cfg->sensor;
 	struct htpa_data *data = dev->data;
+	int16_t *pixels = (int16_t *)frame->buffer;
 	uint32_t x = 0;
 	uint32_t y = 0;
 	const uint8_t *block;
@@ -375,7 +383,7 @@ static void htpa_grab_sort_pixels(const struct device *dev, struct htpa_grabbed_
 			const int16_t px = (int16_t)sys_get_be16(&block[offset]);
 			const int16_t el_offset = UNALIGNED_GET(&el_offsets[i]);
 
-			frame->pixels[x * sensor->height + y] = (int16_t)(px - el_offset);
+			pixels[x * sensor->height + y] = (int16_t)(px - el_offset);
 			x++;
 			if (x >= sensor->width) {
 				x = 0;
@@ -395,7 +403,7 @@ static void htpa_grab_sort_pixels(const struct device *dev, struct htpa_grabbed_
 			const int16_t px = (int16_t)sys_get_be16(&block[offset]);
 			const int16_t el_offset = UNALIGNED_GET(&el_offsets[i]);
 
-			frame->pixels[x * sensor->height + y] = (int16_t)(px - el_offset);
+			pixels[x * sensor->height + y] = (int16_t)(px - el_offset);
 			x++;
 			if (x >= sensor->width) {
 				x = 0;
@@ -409,7 +417,7 @@ static void htpa_grab_thread(void *p1, void *p2, void *p3)
 {
 	const struct device *dev = p1;
 	struct htpa_data *data = dev->data;
-	struct htpa_grabbed_frame *frame;
+	struct video_buffer *frame;
 	int ret;
 
 	ARG_UNUSED(p2);
@@ -427,7 +435,7 @@ static void htpa_grab_thread(void *p1, void *p2, void *p3)
 			htpa_grab_sort_pixels(dev, frame);
 		}
 
-		frame->result = ret;
+		data->grab.frame_results[frame->index] = ret;
 		k_fifo_put(&data->grab.frame_ready_queue, frame);
 	}
 }
@@ -756,8 +764,7 @@ static int htpa_init(const struct device *dev)
 		.grab =                                                                            \
 			{                                                                          \
 				.acquisition_time = HTPA_DEFAULT_ACQUISITION_TIME_USEC,            \
-				.frames = {{.pixels = hm_htpa_pixels_##model##_##inst[0]},         \
-					   {.pixels = hm_htpa_pixels_##model##_##inst[1]}},        \
+				.frame_pixels = &hm_htpa_pixels_##model##_##inst[0][0],            \
 				.raw_top = &hm_htpa_raw_top_##model##_##inst[0][0],                \
 				.raw_bottom = &hm_htpa_raw_bottom_##model##_##inst[0][0],          \
 				.el_top_offsets = hm_htpa_el_top_##model##_##inst,                 \
@@ -766,7 +773,7 @@ static int htpa_init(const struct device *dev)
 		.spi = SPI_DT_SPEC_INST_GET(inst, SPI_OP_MODE_MASTER | SPI_WORD_SET(8) |           \
 							  SPI_LINES_SINGLE),                       \
 	};                                                                                         \
-	DEVICE_DT_INST_DEFINE(inst, htpa_init, NULL, &hm_htpa_data_##model##_##inst,            \
+	DEVICE_DT_INST_DEFINE(inst, htpa_init, NULL, &hm_htpa_data_##model##_##inst,               \
 			      &hm_htpa_cfg_##model##_##inst, POST_KERNEL,                          \
 			      CONFIG_VIDEO_INIT_PRIORITY, &htpa_api);
 

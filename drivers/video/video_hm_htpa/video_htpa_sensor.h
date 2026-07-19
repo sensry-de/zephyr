@@ -83,12 +83,6 @@ struct htpa_config {
 #define HTPA_FRAME_TIMEOUT_MS(block_count)                                                         \
 	(((block_count) + 1U) * HTPA_CONVERSION_TIMEOUT_MS * 2U + MSEC_PER_SEC)
 
-struct htpa_grabbed_frame {
-	void *fifo_reserved;
-	int16_t *pixels;
-	int result;
-};
-
 struct htpa_data {
 	struct spi_dt_spec spi;
 
@@ -117,7 +111,9 @@ struct htpa_data {
 		struct k_thread thread;
 
 		K_KERNEL_STACK_MEMBER(stack, CONFIG_VIDEO_HM_HTPA_GRAB_STACK_SIZE);
-		struct htpa_grabbed_frame frames[HTPA_FRAME_QUEUE_SIZE];
+		struct video_buffer frames[HTPA_FRAME_QUEUE_SIZE];
+		int frame_results[HTPA_FRAME_QUEUE_SIZE];
+		int16_t *frame_pixels;
 		struct k_fifo frame_free_queue;
 		struct k_fifo frame_ready_queue;
 

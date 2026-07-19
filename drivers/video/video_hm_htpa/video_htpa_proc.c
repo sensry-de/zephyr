@@ -15,9 +15,10 @@
 
 #if defined(CONFIG_VIDEO_HM_HTPA_AUTOSCALE_LEGACY)
 static void htpa_legacy_min_max(const struct htpa_sensor_config *sensor,
-				const struct htpa_grabbed_frame *frame, int32_t *minimum,
+				const struct video_buffer *frame, int32_t *minimum,
 				int32_t *maximum)
 {
+	const int16_t *pixels = (const int16_t *)frame->buffer;
 	uint32_t minimum_count = 0U;
 	uint32_t maximum_count = 0U;
 
@@ -26,7 +27,7 @@ static void htpa_legacy_min_max(const struct htpa_sensor_config *sensor,
 
 	for (uint32_t y = 0; y < sensor->height; y++) {
 		for (uint32_t x = 0; x < sensor->width; x++) {
-			const int16_t pixel = frame->pixels[x * sensor->height + y];
+			const int16_t pixel = pixels[x * sensor->height + y];
 
 			if (pixel < *minimum) {
 				minimum_count++;
@@ -59,11 +60,11 @@ static uint32_t htpa_histogram_bin(int16_t sample, int16_t minimum, uint32_t ran
 }
 
 static void htpa_histogram_min_max(const struct htpa_sensor_config *sensor, struct htpa_data *data,
-				   const struct htpa_grabbed_frame *frame, int32_t *lower,
-				   int32_t *upper)
+				   const struct video_buffer *frame, int32_t *lower, int32_t *upper)
 {
 	const uint32_t pixel_count = sensor->width * sensor->height;
 	const uint32_t clip_count = pixel_count * HTPA_AUTOSCALE_CLIP_PERCENT / 100U;
+	const int16_t *pixels = (const int16_t *)frame->buffer;
 	int16_t minimum = INT16_MAX;
 	int16_t maximum = INT16_MIN;
 	int16_t retained_minimum = INT16_MAX;
@@ -75,8 +76,8 @@ static void htpa_histogram_min_max(const struct htpa_sensor_config *sensor, stru
 
 	for (uint32_t y = 0; y < sensor->height; y++) {
 		for (uint32_t x = 0; x < sensor->width; x++) {
-			minimum = MIN(minimum, frame->pixels[x * sensor->height + y]);
-			maximum = MAX(maximum, frame->pixels[x * sensor->height + y]);
+			minimum = MIN(minimum, pixels[x * sensor->height + y]);
+			maximum = MAX(maximum, pixels[x * sensor->height + y]);
 		}
 	}
 
@@ -91,8 +92,8 @@ static void htpa_histogram_min_max(const struct htpa_sensor_config *sensor, stru
 
 	for (uint32_t y = 0; y < sensor->height; y++) {
 		for (uint32_t x = 0; x < sensor->width; x++) {
-			uint32_t bin = htpa_histogram_bin(frame->pixels[x * sensor->height + y],
-							  minimum, range);
+			uint32_t bin =
+				htpa_histogram_bin(pixels[x * sensor->height + y], minimum, range);
 
 			data->proc.histogram[bin]++;
 		}
@@ -116,7 +117,7 @@ static void htpa_histogram_min_max(const struct htpa_sensor_config *sensor, stru
 
 	for (uint32_t y = 0; y < sensor->height; y++) {
 		for (uint32_t x = 0; x < sensor->width; x++) {
-			int16_t sample = frame->pixels[x * sensor->height + y];
+			int16_t sample = pixels[x * sensor->height + y];
 			uint32_t bin = htpa_histogram_bin(sample, minimum, range);
 
 			if ((bin >= lower_bin) && (bin <= upper_bin)) {
@@ -147,8 +148,9 @@ static uint16_t htpa_clamp_pixel(float pixel)
 }
 
 static void htpa_scale_frame(const struct htpa_sensor_config *sensor, struct htpa_data *data,
-			     const struct htpa_grabbed_frame *frame, struct video_buffer *vbuf)
+			     const struct video_buffer *frame, struct video_buffer *vbuf)
 {
+	const int16_t *pixels = (const int16_t *)frame->buffer;
 	uint16_t *output = (uint16_t *)vbuf->buffer;
 	int32_t minimum;
 	int32_t maximum;
@@ -167,7 +169,7 @@ static void htpa_scale_frame(const struct htpa_sensor_config *sensor, struct htp
 
 	for (uint32_t y = 0; y < sensor->height; y++) {
 		for (uint32_t x = 0; x < sensor->width; x++) {
-			float pixel = frame->pixels[x * sensor->height + y];
+			float pixel = pixels[x * sensor->height + y];
 
 			pixel = (pixel - offset) * scale;
 			output[y * sensor->width + x] = htpa_clamp_pixel(pixel);
@@ -181,7 +183,7 @@ int htpa_consume_frame(const struct device *dev, struct video_buffer *vbuf)
 {
 	const struct htpa_config *cfg = dev->config;
 	struct htpa_data *data = dev->data;
-	struct htpa_grabbed_frame *frame;
+	struct video_buffer *frame;
 	int64_t deadline;
 	int ret;
 
@@ -202,7 +204,7 @@ int htpa_consume_frame(const struct device *dev, struct video_buffer *vbuf)
 		return -ECANCELED;
 	}
 
-	ret = frame->result;
+	ret = data->grab.frame_results[frame->index];
 	if (ret == 0) {
 		htpa_scale_frame(cfg->sensor, data, frame, vbuf);
 		vbuf->timestamp = k_uptime_get_32();
