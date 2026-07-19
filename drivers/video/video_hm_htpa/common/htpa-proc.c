@@ -14,8 +14,8 @@
 #define HTPA_AUTOSCALE_CLIP_PERCENT 1U
 
 #if defined(CONFIG_VIDEO_HM_HTPA_AUTOSCALE_LEGACY)
-static void htpa_legacy_min_max(const struct hm_htpa_sensor_config *sensor,
-				const struct hm_htpa_frame *frame, int32_t *minimum,
+static void htpa_legacy_min_max(const struct htpa_sensor_config *sensor,
+				const struct htpa_grabbed_frame *frame, int32_t *minimum,
 				int32_t *maximum)
 {
 	uint32_t minimum_count = 0U;
@@ -58,9 +58,9 @@ static uint32_t htpa_histogram_bin(int16_t sample, int16_t minimum, uint32_t ran
 	return (offset * (HTPA_HISTOGRAM_BIN_COUNT - 1U)) / range;
 }
 
-static void htpa_histogram_min_max(const struct hm_htpa_sensor_config *sensor,
-				   struct hm_htpa_data *data, const struct hm_htpa_frame *frame,
-				   int32_t *lower, int32_t *upper)
+static void htpa_histogram_min_max(const struct htpa_sensor_config *sensor, struct htpa_data *data,
+				   const struct htpa_grabbed_frame *frame, int32_t *lower,
+				   int32_t *upper)
 {
 	const uint32_t pixel_count = sensor->width * sensor->height;
 	const uint32_t clip_count = pixel_count * HTPA_AUTOSCALE_CLIP_PERCENT / 100U;
@@ -146,8 +146,8 @@ static uint16_t htpa_clamp_pixel(float pixel)
 	return (uint16_t)pixel;
 }
 
-static void htpa_scale_frame(const struct hm_htpa_sensor_config *sensor, struct hm_htpa_data *data,
-			     const struct hm_htpa_frame *frame, struct video_buffer *vbuf)
+static void htpa_scale_frame(const struct htpa_sensor_config *sensor, struct htpa_data *data,
+			     const struct htpa_grabbed_frame *frame, struct video_buffer *vbuf)
 {
 	uint16_t *output = (uint16_t *)vbuf->buffer;
 	int32_t minimum;
@@ -179,9 +179,9 @@ static void htpa_scale_frame(const struct hm_htpa_sensor_config *sensor, struct 
 
 int htpa_consume_frame(const struct device *dev, struct video_buffer *vbuf)
 {
-	const struct hm_htpa_config *cfg = dev->config;
-	struct hm_htpa_data *data = dev->data;
-	struct hm_htpa_frame *frame;
+	const struct htpa_config *cfg = dev->config;
+	struct htpa_data *data = dev->data;
+	struct htpa_grabbed_frame *frame;
 	int64_t deadline;
 	int ret;
 

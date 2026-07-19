@@ -9,13 +9,12 @@
 
 #include <zephyr/drivers/spi.h>
 #include <zephyr/drivers/video.h>
-#include <zephyr/nvmem.h>
 #include <zephyr/kernel.h>
 
 #include "htpa-calib.h"
 #include "htpa-proc.h"
 
-struct hm_htpa_sensor_config {
+struct htpa_sensor_config {
 	uint16_t width;
 	uint16_t height;
 	uint16_t block_count;
@@ -29,10 +28,10 @@ struct hm_htpa_sensor_config {
 	uint32_t e_bpa_calib;
 };
 
-struct hm_htpa_config {
+struct htpa_config {
 	const struct video_format_cap *hm_htpa_caps;
 	const struct device *calibration_flash;
-	const struct hm_htpa_sensor_config *sensor;
+	const struct htpa_sensor_config *sensor;
 };
 
 #define HTPA_FRAME_QUEUE_SIZE      2
@@ -40,13 +39,13 @@ struct hm_htpa_config {
 #define HTPA_FRAME_TIMEOUT_MS(block_count)                                                         \
 	(((block_count) + 1U) * HTPA_CONVERSION_TIMEOUT_MS * 2U + MSEC_PER_SEC)
 
-struct hm_htpa_frame {
+struct htpa_grabbed_frame {
 	void *fifo_reserved;
 	int16_t *pixels;
 	int result;
 };
 
-struct hm_htpa_data {
+struct htpa_data {
 	struct spi_dt_spec spi;
 
 	struct video_format fmt;
@@ -74,7 +73,7 @@ struct hm_htpa_data {
 		struct k_thread thread;
 
 		K_KERNEL_STACK_MEMBER(stack, CONFIG_VIDEO_HM_HTPA_GRAB_STACK_SIZE);
-		struct hm_htpa_frame frames[HTPA_FRAME_QUEUE_SIZE];
+		struct htpa_grabbed_frame frames[HTPA_FRAME_QUEUE_SIZE];
 		struct k_fifo frame_free_queue;
 		struct k_fifo frame_ready_queue;
 

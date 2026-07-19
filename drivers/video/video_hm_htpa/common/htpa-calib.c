@@ -18,8 +18,8 @@ LOG_MODULE_REGISTER(htpa_calib, CONFIG_VIDEO_LOG_LEVEL);
 
 static uint8_t read_flash_bytewise(const struct device *dev, unsigned int address)
 {
-	const struct hm_htpa_config *cfg = dev->config;
-	struct hm_htpa_data *data = dev->data;
+	const struct htpa_config *cfg = dev->config;
+	struct htpa_data *data = dev->data;
 	const struct device *flash_dev = cfg->calibration_flash;
 	uint8_t rx_byte;
 	int ret;
@@ -40,9 +40,9 @@ static uint8_t read_flash_bytewise(const struct device *dev, unsigned int addres
  */
 int htpa_read_calibration(const struct device *dev, heimann_calibration_t *calib)
 {
-	const struct hm_htpa_config *cfg = dev->config;
-	const struct hm_htpa_sensor_config *sensor = cfg->sensor;
-	struct hm_htpa_data *data = dev->data;
+	const struct htpa_config *cfg = dev->config;
+	const struct htpa_sensor_config *sensor = cfg->sensor;
+	struct htpa_data *data = dev->data;
 
 	if (!device_is_ready(cfg->calibration_flash)) {
 		LOG_ERR("calibration flash is not ready");

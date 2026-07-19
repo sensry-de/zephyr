@@ -38,7 +38,7 @@ LOG_MODULE_REGISTER(htpa, CONFIG_VIDEO_LOG_LEVEL);
 
 static int htpa_sens_write_reg(const struct device *dev, uint8_t reg, uint8_t value)
 {
-	struct hm_htpa_data *data = dev->data;
+	struct htpa_data *data = dev->data;
 	struct spi_buf tx_buf[2];
 	const struct spi_buf_set tx = {
 		.buffers = tx_buf,
@@ -63,7 +63,7 @@ static int htpa_sens_write_reg(const struct device *dev, uint8_t reg, uint8_t va
 
 static int htpa_sens_read(const struct device *dev, uint8_t reg, uint8_t *rx_buffer, size_t rx_len)
 {
-	struct hm_htpa_data *data = dev->data;
+	struct htpa_data *data = dev->data;
 	struct spi_buf tx_buf = {
 		.buf = &reg,
 		.len = 1,
@@ -105,7 +105,7 @@ static int htpa_sens_read_reg(const struct device *dev, uint8_t reg, uint8_t *va
 
 static int htpa_sens_has_errors_active(const struct device *dev)
 {
-	struct hm_htpa_data *data = dev->data;
+	struct htpa_data *data = dev->data;
 
 	if ((data->communication_error_count > 0) || (data->communication_error != 0)) {
 		LOG_ERR("Communication error(s): %d during sensor readout",
@@ -120,7 +120,7 @@ static int htpa_sens_has_errors_active(const struct device *dev)
 
 static int htpa_sens_wakeup(const struct device *dev)
 {
-	struct hm_htpa_data *data = dev->data;
+	struct htpa_data *data = dev->data;
 	uint8_t status;
 	uint32_t retry_counter = 100;
 
@@ -168,7 +168,7 @@ static int htpa_sens_wakeup(const struct device *dev)
 
 static void htpa_grab_init_mem(const struct device *dev)
 {
-	struct hm_htpa_data *data = dev->data;
+	struct htpa_data *data = dev->data;
 
 	k_fifo_init(&data->grab.frame_free_queue);
 	k_fifo_init(&data->grab.frame_ready_queue);
@@ -191,9 +191,9 @@ static int htpa_grab_select_sensor_block(const struct device *dev, uint32_t bloc
 
 static int htpa_grab_image(const struct device *dev)
 {
-	const struct hm_htpa_config *cfg = dev->config;
-	const struct hm_htpa_sensor_config *sensor = cfg->sensor;
-	struct hm_htpa_data *data = dev->data;
+	const struct htpa_config *cfg = dev->config;
+	const struct htpa_sensor_config *sensor = cfg->sensor;
+	struct htpa_data *data = dev->data;
 	uint8_t status;
 	int ret;
 
@@ -261,11 +261,11 @@ static int htpa_grab_image(const struct device *dev)
 	return 0;
 }
 
-static void htpa_grab_sort_pixels(const struct device *dev, struct hm_htpa_frame *frame)
+static void htpa_grab_sort_pixels(const struct device *dev, struct htpa_grabbed_frame *frame)
 {
-	const struct hm_htpa_config *cfg = dev->config;
-	const struct hm_htpa_sensor_config *sensor = cfg->sensor;
-	struct hm_htpa_data *data = dev->data;
+	const struct htpa_config *cfg = dev->config;
+	const struct htpa_sensor_config *sensor = cfg->sensor;
+	struct htpa_data *data = dev->data;
 	uint32_t x = 0;
 	uint32_t y = 0;
 	const uint8_t *block;
@@ -326,8 +326,8 @@ static void htpa_grab_sort_pixels(const struct device *dev, struct hm_htpa_frame
 static void htpa_grab_thread(void *p1, void *p2, void *p3)
 {
 	const struct device *dev = p1;
-	struct hm_htpa_data *data = dev->data;
-	struct hm_htpa_frame *frame;
+	struct htpa_data *data = dev->data;
+	struct htpa_grabbed_frame *frame;
 	int ret;
 
 	ARG_UNUSED(p2);
@@ -352,7 +352,7 @@ static void htpa_grab_thread(void *p1, void *p2, void *p3)
 
 static int htpa_grab_start_acquisition(const struct device *dev)
 {
-	struct hm_htpa_data *data = dev->data;
+	struct htpa_data *data = dev->data;
 
 	htpa_grab_init_mem(dev);
 
@@ -376,7 +376,7 @@ static int htpa_grab_start_acquisition(const struct device *dev)
 static void hm_htpa_worker(void *p1, void *p2, void *p3)
 {
 	const struct device *dev = p1;
-	struct hm_htpa_data *data = dev->data;
+	struct htpa_data *data = dev->data;
 	struct video_buffer *vbuf;
 
 	ARG_UNUSED(p2);
@@ -426,7 +426,7 @@ static void hm_htpa_worker(void *p1, void *p2, void *p3)
 
 static int hm_htpa_get_caps(const struct device *dev, struct video_caps *caps)
 {
-	const struct hm_htpa_config *cfg = dev->config;
+	const struct htpa_config *cfg = dev->config;
 
 	caps->type = VIDEO_BUF_TYPE_OUTPUT;
 	caps->format_caps = cfg->hm_htpa_caps;
@@ -438,7 +438,7 @@ static int hm_htpa_get_caps(const struct device *dev, struct video_caps *caps)
 
 static int hm_htpa_set_fmt(const struct device *dev, struct video_format *fmt)
 {
-	struct hm_htpa_data *data = dev->data;
+	struct htpa_data *data = dev->data;
 
 	if (fmt->type != data->fmt.type) {
 		return -ENOTSUP;
@@ -462,7 +462,7 @@ static int hm_htpa_set_fmt(const struct device *dev, struct video_format *fmt)
 
 static int hm_htpa_get_fmt(const struct device *dev, struct video_format *fmt)
 {
-	struct hm_htpa_data *data = dev->data;
+	struct htpa_data *data = dev->data;
 
 	memcpy(fmt, &data->fmt, sizeof(*fmt));
 
@@ -471,7 +471,7 @@ static int hm_htpa_get_fmt(const struct device *dev, struct video_format *fmt)
 
 static int hm_htpa_set_stream(const struct device *dev, bool enable, enum video_buf_type type)
 {
-	struct hm_htpa_data *data = dev->data;
+	struct htpa_data *data = dev->data;
 
 	if (type != VIDEO_BUF_TYPE_OUTPUT) {
 		return -ENOTSUP;
@@ -491,7 +491,7 @@ static int hm_htpa_set_stream(const struct device *dev, bool enable, enum video_
 
 static int hm_htpa_enqueue(const struct device *dev, struct video_buffer *vbuf)
 {
-	struct hm_htpa_data *data = dev->data;
+	struct htpa_data *data = dev->data;
 	struct video_format *fmt = &data->fmt;
 
 	if (vbuf->type != VIDEO_BUF_TYPE_OUTPUT) {
@@ -525,7 +525,7 @@ static int hm_htpa_enqueue(const struct device *dev, struct video_buffer *vbuf)
 static int hm_htpa_dequeue(const struct device *dev, struct video_buffer **vbuf,
 			   k_timeout_t timeout)
 {
-	struct hm_htpa_data *data = dev->data;
+	struct htpa_data *data = dev->data;
 
 	*vbuf = k_fifo_get(&data->framebuffer_release_queue, timeout);
 	if (*vbuf == NULL) {
@@ -537,7 +537,7 @@ static int hm_htpa_dequeue(const struct device *dev, struct video_buffer **vbuf,
 
 static int hm_htpa_flush(const struct device *dev, bool cancel)
 {
-	struct hm_htpa_data *data = dev->data;
+	struct htpa_data *data = dev->data;
 	struct video_buffer *vbuf;
 
 	k_mutex_lock(&data->lock, K_FOREVER);
@@ -585,8 +585,8 @@ static DEVICE_API(video, hm_htpa_api) = {
 
 static int hm_htpa_init(const struct device *dev)
 {
-	const struct hm_htpa_config *cfg = dev->config;
-	struct hm_htpa_data *data = dev->data;
+	const struct htpa_config *cfg = dev->config;
+	struct htpa_data *data = dev->data;
 	struct video_format default_fmt = {
 		.type = VIDEO_BUF_TYPE_OUTPUT,
 		.pixelformat = cfg->hm_htpa_caps[0].pixelformat,
@@ -665,12 +665,12 @@ static int hm_htpa_init(const struct device *dev)
 		__aligned(4) hm_htpa_raw_bottom_##model##_##inst[block_count][block_length];       \
 	static uint8_t __aligned(4) hm_htpa_el_top_##model##_##inst[block_length];                 \
 	static uint8_t __aligned(4) hm_htpa_el_bottom_##model##_##inst[block_length];              \
-	static const struct hm_htpa_config hm_htpa_cfg_##model##_##inst = {                        \
+	static const struct htpa_config hm_htpa_cfg_##model##_##inst = {                           \
 		.hm_htpa_caps = caps,                                                              \
 		.calibration_flash = DEVICE_DT_GET(DT_INST_PHANDLE(inst, calibration_flash)),      \
 		.sensor = sensor_cfg,                                                              \
 	};                                                                                         \
-	static struct hm_htpa_data hm_htpa_data_##model##_##inst = {                               \
+	static struct htpa_data hm_htpa_data_##model##_##inst = {                                  \
 		.grab =                                                                            \
 			{                                                                          \
 				.acquisition_time = HTPA_DEFAULT_ACQUISITION_TIME_USEC,            \
@@ -706,7 +706,7 @@ BUILD_ASSERT((HTPA_WIDTH_120X84 * HTPA_HEIGHT_120X84) <= UINT16_MAX,
 	     "Histogram counter type is too small");
 #endif
 
-static const struct hm_htpa_sensor_config hm_htpa_sensor_cfg_120x84 = {
+static const struct htpa_sensor_config hm_htpa_sensor_cfg_120x84 = {
 	.width = HTPA_WIDTH_120X84,
 	.height = HTPA_HEIGHT_120X84,
 	.block_count = HTPA_BLOCK_COUNT_120X84,
@@ -762,7 +762,7 @@ BUILD_ASSERT((HTPA_WIDTH_160X120 * HTPA_HEIGHT_160X120) <= UINT16_MAX,
 	     "Histogram counter type is too small");
 #endif
 
-static const struct hm_htpa_sensor_config hm_htpa_sensor_cfg_160x120 = {
+static const struct htpa_sensor_config hm_htpa_sensor_cfg_160x120 = {
 	.width = HTPA_WIDTH_160X120,
 	.height = HTPA_HEIGHT_160X120,
 	.block_count = HTPA_BLOCK_COUNT_160X120,
