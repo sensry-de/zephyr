@@ -19,16 +19,52 @@ LOG_MODULE_REGISTER(htpa, CONFIG_VIDEO_LOG_LEVEL);
 
 #include "video_htpa_sensor.h"
 
-/* Configuration register (write only). */
+/*
+ * Configuration register (write only):
+ *
+ * |  7  |  6  |  5  |  4  |   3   |    2     |   1   |    0   |
+ * | RESERVED  |   Block   | Start | VDD_MEAS | BLIND | WAKEUP |
+ */
 #define CONFIGURATION_REGISTER 0x01
 
-/* Status register (read only). */
+/*
+ * Status register (read only):
+ *
+ * |  7  |  6  |  5  |  4  |   3   |    2     |   1   |   0   |
+ * | RESERVED  |   Block   | RESERVED | VDD_MEAS | BLIND | EOC |
+ */
 #define STATUS_REGISTER 0x02
 
-/* Trim registers (write only). */
+/*
+ * Trim register 1 (write only):
+ *
+ * |  7  |  6  |  5  |  4  |  3  |  2  |  1  |  0  |
+ * | RESERVED  |  REF_CAL  |         MBIT          |
+ */
 #define TRIM_REGISTER1 0x03
+
+/*
+ * Trim register 2 (write only):
+ *
+ * |  7  |  6  |  5  |  4  |  3  |  2  |  1  |  0  |
+ * |    RESERVED     |       BIAS TRIM TOP         |
+ */
 #define TRIM_REGISTER2 0x04
+
+/*
+ * Trim register 3 (write only):
+ *
+ * |  7  |  6  |  5  |  4  |  3  |  2  |  1  |  0  |
+ * |    RESERVED     |       BIAS TRIM BOT         |
+ */
 #define TRIM_REGISTER3 0x05
+
+/*
+ * Trim register 4 (write only):
+ *
+ * |  7  |  6  |  5  |  4  |  3  |  2  |  1  |  0  |
+ * |    RESERVED     |             CLK TRIM        |
+ */
 #define TRIM_REGISTER4 0x06
 
 /* Select the top-half sensor data for reading or writing. */
@@ -759,11 +795,41 @@ static const struct htpa_sensor_config hm_htpa_sensor_cfg_120x84 = {
 	.pixels_per_block = HTPA_PIXELS_PER_BLOCK_120X84,
 	.block_length = HTPA_BLOCK_LENGTH_120X84,
 	.data_offset = HTPA_DATA_OFFSET_120X84,
+	.e_pixcmin = {0x0000, 0x0001, 0x0002, 0x0003},
+	.e_pixcmax = {0x0004, 0x0005, 0x0006, 0x0007},
+	.e_gradscale = 0x0008,
+	.e_tablenumber = {0x000b, 0x000c},
+	.e_epsilon = 0x000d,
 	.e_id = {0x0074, 0x0075, 0x0076, 0x0077},
 	.e_mbit_calib = 0x001a,
 	.e_bias_calib = 0x001b,
 	.e_clk_calib = 0x001c,
 	.e_bpa_calib = 0x001d,
+	.e_pu_calib = 0x001e,
+	.e_arraytype = 0x0022,
+	.e_vddth1 = {0x0026, 0x0027},
+	.e_vddth2 = {0x0028, 0x0029},
+	.e_ptatgr = {0x0034, 0x0035, 0x0036, 0x0037},
+	.e_ptatoff = {0x0038, 0x0039, 0x003a, 0x003b},
+	.e_ptatth1 = {0x003c, 0x003d},
+	.e_ptatth2 = {0x003e, 0x003f},
+	.e_vddscgrad = 0x004e,
+	.e_vddscoff = 0x004f,
+	.e_globaloff = 0x0054,
+	.e_globalgain = {0x0055, 0x0056},
+	.e_mbit_user = 0x0060,
+	.e_bias_user = 0x0061,
+	.e_clk_user = 0x0062,
+	.e_bpa_user = 0x0063,
+	.e_pu_user = 0x0064,
+	.e_nrofdefpix = 0x007f,
+	.e_deadpixadr = 0x0080,
+	.e_deadpixmask = 0x00e0,
+	.e_vddcompgrad = 0x20e0,
+	.e_vddcompoff = 0x2e00,
+	.e_thgrad = 0x3b20,
+	.e_thoffset = 0x6280,
+	.e_pij = 0xb140,
 };
 
 static const struct video_format_cap hm_htpa_caps_120x84[] = {
@@ -815,11 +881,41 @@ static const struct htpa_sensor_config hm_htpa_sensor_cfg_160x120 = {
 	.pixels_per_block = HTPA_PIXELS_PER_BLOCK_160X120,
 	.block_length = HTPA_BLOCK_LENGTH_160X120,
 	.data_offset = HTPA_DATA_OFFSET_160X120,
+	.e_pixcmin = {0x0000, 0x0001, 0x0002, 0x0003},
+	.e_pixcmax = {0x0004, 0x0005, 0x0006, 0x0007},
+	.e_gradscale = 0x0008,
+	.e_tablenumber = {0x000b, 0x000c},
+	.e_epsilon = 0x000d,
 	.e_id = {0x0074, 0x0075, 0x0076, 0x0077},
 	.e_mbit_calib = 0x001a,
 	.e_bias_calib = 0x001b,
 	.e_clk_calib = 0x001c,
 	.e_bpa_calib = 0x001d,
+	.e_pu_calib = 0x001e,
+	.e_arraytype = 0x0022,
+	.e_vddth1 = {0x0026, 0x0027},
+	.e_vddth2 = {0x0028, 0x0029},
+	.e_ptatgr = {0x0034, 0x0035, 0x0036, 0x0037},
+	.e_ptatoff = {0x0038, 0x0039, 0x003a, 0x003b},
+	.e_ptatth1 = {0x003c, 0x003d},
+	.e_ptatth2 = {0x003e, 0x003f},
+	.e_vddscgrad = 0x004e,
+	.e_vddscoff = 0x004f,
+	.e_globaloff = 0x0054,
+	.e_globalgain = {0x0055, 0x0056},
+	.e_mbit_user = 0x0060,
+	.e_bias_user = 0x0061,
+	.e_clk_user = 0x0062,
+	.e_bpa_user = 0x0063,
+	.e_pu_user = 0x0064,
+	.e_nrofdefpix = 0x007f,
+	.e_deadpixadr = 0x0080,
+	.e_deadpixmask = 0x0140,
+	.e_vddcompgrad = 0x2100,
+	.e_vddcompoff = 0x2d80,
+	.e_thgrad = 0x3a00,
+	.e_thoffset = 0xd000,
+	.e_pij = 0x16600,
 };
 
 static const struct video_format_cap hm_htpa_caps_160x120[] = {
