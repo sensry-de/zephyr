@@ -274,7 +274,7 @@ static int hm_htpa_init(const struct device *dev)
 		return ret;
 	}
 
-	if (0 != htpa_start_sensor_acquisition(dev)) {
+	if (0 != htpa_grab_start_acquisition(dev)) {
 		LOG_ERR("Failed to initialize sensor %s", dev->name);
 		return -EINVAL;
 	}

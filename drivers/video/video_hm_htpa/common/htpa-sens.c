@@ -432,7 +432,7 @@ static int htpa_sens_weakup(const struct device *dev)
 	return 0;
 }
 
-int htpa_start_sensor_acquisition(const struct device *dev)
+int htpa_grab_start_acquisition(const struct device *dev)
 {
 	struct hm_htpa_data *data = dev->data;
 
