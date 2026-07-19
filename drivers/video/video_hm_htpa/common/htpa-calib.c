@@ -9,7 +9,7 @@ LOG_MODULE_REGISTER(htpa_calib, CONFIG_VIDEO_LOG_LEVEL);
 
 #include <zephyr/device.h>
 
-#include "htpa-common.h"
+#include "../htpa-common.h"
 #include "htpa-calib.h"
 
 #include "zephyr/drivers/flash.h"
