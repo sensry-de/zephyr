@@ -12,7 +12,7 @@ LOG_MODULE_REGISTER(htpa_sens, CONFIG_VIDEO_LOG_LEVEL);
 #include <zephyr/toolchain.h>
 #include <zephyr/drivers/spi.h>
 
-#include "htpa-common.h"
+#include "../htpa-common.h"
 #include "htpa-sens.h"
 
 /*
@@ -93,7 +93,7 @@ LOG_MODULE_REGISTER(htpa_sens, CONFIG_VIDEO_LOG_LEVEL);
 /* Select the bottom-half sensor data for reading or writing. */
 #define BOTTOM_HALF_SENSOR_DATA_REGISTER 0x0B
 
-static int htpa_init_mem(const struct device *dev)
+static int htpa_grab_init_mem(const struct device *dev)
 {
 	struct hm_htpa_data *data = dev->data;
 
@@ -105,7 +105,7 @@ static int htpa_init_mem(const struct device *dev)
 	return 0;
 }
 
-static int hm_htap_has_errors_active(const struct device *dev)
+static int htpa_sens_has_errors_active(const struct device *dev)
 {
 	struct hm_htpa_data *data = dev->data;
 
@@ -120,7 +120,7 @@ static int hm_htap_has_errors_active(const struct device *dev)
 	return 0;
 }
 
-static int htpa_write_sensor_reg(const struct device *dev, uint8_t reg, uint8_t value)
+static int htpa_sens_write_reg(const struct device *dev, uint8_t reg, uint8_t value)
 {
 	struct hm_htpa_data *data = dev->data;
 
@@ -149,7 +149,7 @@ static int htpa_write_sensor_reg(const struct device *dev, uint8_t reg, uint8_t 
 	return 0;
 }
 
-static int htpa_select_sensor_block(const struct device *dev, uint32_t block,
+static int htpa_grab_select_sensor_block(const struct device *dev, uint32_t block,
 				    uint16_t block_count)
 {
 	uint8_t configuration = 0x0bU;
@@ -158,10 +158,10 @@ static int htpa_select_sensor_block(const struct device *dev, uint32_t block,
 		configuration = (uint8_t)(0x09U | (block << 4));
 	}
 
-	return htpa_write_sensor_reg(dev, CONFIGURATION_REGISTER, configuration);
+	return htpa_sens_write_reg(dev, CONFIGURATION_REGISTER, configuration);
 }
 
-static int htpa_read_sensor(const struct device *dev, uint8_t reg, uint8_t *rx_buffer,
+static int htpa_sens_read(const struct device *dev, uint8_t reg, uint8_t *rx_buffer,
 			    size_t rx_len)
 {
 	struct hm_htpa_data *data = dev->data;
@@ -203,9 +203,9 @@ static int htpa_read_sensor(const struct device *dev, uint8_t reg, uint8_t *rx_b
 	return 0;
 }
 
-static int htpa_read_sensor_reg(const struct device *dev, uint8_t reg, uint8_t *value)
+static int htpa_sens_read_reg(const struct device *dev, uint8_t reg, uint8_t *value)
 {
-	if (0 != htpa_read_sensor(dev, reg, value, 1)) {
+	if (0 != htpa_sens_read(dev, reg, value, 1)) {
 		return -EIO;
 	}
 	return 0;
@@ -224,7 +224,7 @@ static int htpa_grab_image(const struct device *dev)
 
 	/* Read one additional block containing the electrical offsets. */
 	for (uint32_t b = 0; b < (sensor->block_count + 1); b++) {
-		ret = htpa_select_sensor_block(dev, b, sensor->block_count);
+		ret = htpa_grab_select_sensor_block(dev, b, sensor->block_count);
 		if (ret != 0) {
 			return ret;
 		}
@@ -239,7 +239,7 @@ static int htpa_grab_image(const struct device *dev)
 
 		while ((status & 0x1U) == 0U) {
 			/* Wait for the conversion to complete. */
-			ret = htpa_read_sensor_reg(dev, STATUS_REGISTER, &status);
+			ret = htpa_sens_read_reg(dev, STATUS_REGISTER, &status);
 			if (ret != 0) {
 				return ret;
 			}
@@ -273,13 +273,13 @@ static int htpa_grab_image(const struct device *dev)
 			bottom_block = &data->grab.raw_bottom[b * sensor->block_length];
 		}
 
-		ret = htpa_read_sensor(dev, TOP_HALF_SENSOR_DATA_REGISTER, top_block,
+		ret = htpa_sens_read(dev, TOP_HALF_SENSOR_DATA_REGISTER, top_block,
 				       sensor->block_length);
 		if (ret != 0) {
 			return ret;
 		}
 
-		ret = htpa_read_sensor(dev, BOTTOM_HALF_SENSOR_DATA_REGISTER, bottom_block,
+		ret = htpa_sens_read(dev, BOTTOM_HALF_SENSOR_DATA_REGISTER, bottom_block,
 				       sensor->block_length);
 		if (ret != 0) {
 			return ret;
@@ -370,7 +370,7 @@ static void htpa_grab_thread(void *p1, void *p2, void *p3)
 		frame = k_fifo_get(&data->grab.frame_free_queue, K_FOREVER);
 		ret = htpa_grab_image(dev);
 
-		if (hm_htap_has_errors_active(dev) != 0 && ret == 0) {
+		if (htpa_sens_has_errors_active(dev) != 0 && ret == 0) {
 			ret = -EIO;
 		}
 
@@ -383,11 +383,11 @@ static void htpa_grab_thread(void *p1, void *p2, void *p3)
 	}
 }
 
-static int htpa_weakup_sensor(const struct device *dev)
+static int htpa_sens_weakup(const struct device *dev)
 {
 	struct hm_htpa_data *data = dev->data;
 
-	if (0 != htpa_write_sensor_reg(dev, CONFIGURATION_REGISTER, 0x01)) {
+	if (0 != htpa_sens_write_reg(dev, CONFIGURATION_REGISTER, 0x01)) {
 		LOG_ERR("Failed to wakeup sensor %s", dev->name);
 		return -EINVAL;
 	}
@@ -396,7 +396,7 @@ static int htpa_weakup_sensor(const struct device *dev)
 	uint32_t retry_counter = 100;
 
 	do {
-		int ret = htpa_read_sensor_reg(dev, STATUS_REGISTER, &status);
+		int ret = htpa_sens_read_reg(dev, STATUS_REGISTER, &status);
 
 		if (ret != 0) {
 			return ret;
@@ -409,22 +409,22 @@ static int htpa_weakup_sensor(const struct device *dev)
 		}
 	} while (!(status & 0x01));
 
-	if (0 != htpa_write_sensor_reg(dev, TRIM_REGISTER1, data->calib.mbit_calib)) {
+	if (0 != htpa_sens_write_reg(dev, TRIM_REGISTER1, data->calib.mbit_calib)) {
 		LOG_ERR("Failed to write TRIM_REGISTER1 %s", dev->name);
 		return -EINVAL;
 	}
 
-	if (0 != htpa_write_sensor_reg(dev, TRIM_REGISTER2, data->calib.bias_calib)) {
+	if (0 != htpa_sens_write_reg(dev, TRIM_REGISTER2, data->calib.bias_calib)) {
 		LOG_ERR("Failed to write TRIM_REGISTER2 %s", dev->name);
 		return -EINVAL;
 	}
 
-	if (0 != htpa_write_sensor_reg(dev, TRIM_REGISTER3, data->calib.bpa_calib)) {
+	if (0 != htpa_sens_write_reg(dev, TRIM_REGISTER3, data->calib.bpa_calib)) {
 		LOG_ERR("Failed to write TRIM_REGISTER3 %s", dev->name);
 		return -EINVAL;
 	}
 
-	if (0 != htpa_write_sensor_reg(dev, TRIM_REGISTER4, data->calib.clk_calib)) {
+	if (0 != htpa_sens_write_reg(dev, TRIM_REGISTER4, data->calib.clk_calib)) {
 		LOG_ERR("Failed to write TRIM_REGISTER4 %s", dev->name);
 		return -EINVAL;
 	}
@@ -436,17 +436,17 @@ int htpa_start_sensor_acquisition(const struct device *dev)
 {
 	struct hm_htpa_data *data = dev->data;
 
-	if (0 != htpa_init_mem(dev)) {
+	if (0 != htpa_grab_init_mem(dev)) {
 		LOG_ERR("Failed to initialize memory %s", dev->name);
 		return -EINVAL;
 	}
 
-	if (0 != htpa_weakup_sensor(dev)) {
+	if (0 != htpa_sens_weakup(dev)) {
 		LOG_ERR("Failed to wakeup sensor %s", dev->name);
 		return -EINVAL;
 	}
 
-	if (hm_htap_has_errors_active(dev) != 0) {
+	if (htpa_sens_has_errors_active(dev) != 0) {
 		return -EIO;
 	}
 
