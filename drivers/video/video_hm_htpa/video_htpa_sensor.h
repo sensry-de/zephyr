@@ -66,7 +66,7 @@ struct htpa_data {
 	int communication_error;
 	uint32_t communication_error_count;
 
-	heimann_calibration_t calib;
+	struct htpa_calib calib;
 
 	struct {
 		uint32_t acquisition_time;
