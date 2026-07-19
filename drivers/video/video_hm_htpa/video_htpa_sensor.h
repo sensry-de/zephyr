@@ -11,8 +11,22 @@
 #include <zephyr/drivers/video.h>
 #include <zephyr/kernel.h>
 
-#include "video_htpa_calib.h"
 #include "video_htpa_proc.h"
+
+struct htpa_calib {
+	/* EEPROM calibration data */
+	uint8_t mbit_calib;
+	uint8_t bias_calib;
+	uint8_t clk_calib;
+	uint8_t bpa_calib;
+	uint8_t pu_calib;
+	uint8_t mbit_user;
+	uint8_t bias_user;
+	uint8_t clk_user;
+	uint8_t bpa_user;
+	uint8_t pu_user;
+	uint32_t id;
+};
 
 struct htpa_sensor_config {
 	uint16_t width;

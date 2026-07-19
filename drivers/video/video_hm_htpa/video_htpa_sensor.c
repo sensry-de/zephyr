@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include <zephyr/device.h>
+#include <zephyr/drivers/flash.h>
 #include <zephyr/kernel.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/sys/util.h>
@@ -35,6 +36,51 @@ LOG_MODULE_REGISTER(htpa, CONFIG_VIDEO_LOG_LEVEL);
 
 /* Select the bottom-half sensor data for reading or writing. */
 #define BOTTOM_HALF_SENSOR_DATA_REGISTER 0x0B
+
+static uint8_t htpa_flash_read_bytewise(const struct device *dev, uint32_t address)
+{
+	const struct htpa_config *cfg = dev->config;
+	struct htpa_data *data = dev->data;
+	uint8_t value;
+	int ret;
+
+	ret = flash_read(cfg->calibration_flash, address, &value, sizeof(value));
+	if (ret != 0) {
+		data->communication_error = ret;
+		data->communication_error_count++;
+		return 0U;
+	}
+
+	return value;
+}
+
+static int htpa_flash_read_calibration(const struct device *dev, struct htpa_calib *calib)
+{
+	const struct htpa_config *cfg = dev->config;
+	const struct htpa_sensor_config *sensor = cfg->sensor;
+	struct htpa_data *data = dev->data;
+
+	if (!device_is_ready(cfg->calibration_flash)) {
+		LOG_ERR("Calibration flash is not ready");
+		return -ENODEV;
+	}
+
+	calib->id = (uint32_t)htpa_flash_read_bytewise(dev, sensor->e_id[3]) << 24 |
+		    (uint32_t)htpa_flash_read_bytewise(dev, sensor->e_id[2]) << 16 |
+		    (uint32_t)htpa_flash_read_bytewise(dev, sensor->e_id[1]) << 8 |
+		    (uint32_t)htpa_flash_read_bytewise(dev, sensor->e_id[0]);
+	calib->mbit_calib = htpa_flash_read_bytewise(dev, sensor->e_mbit_calib);
+	calib->bias_calib = htpa_flash_read_bytewise(dev, sensor->e_bias_calib);
+	calib->clk_calib = htpa_flash_read_bytewise(dev, sensor->e_clk_calib);
+	calib->bpa_calib = htpa_flash_read_bytewise(dev, sensor->e_bpa_calib);
+
+	if ((data->calib.id == 0U) || (data->calib.id == UINT32_MAX)) {
+		LOG_ERR("Invalid calibration data id");
+		return -EINVAL;
+	}
+
+	return 0;
+}
 
 static int htpa_sens_write_reg(const struct device *dev, uint8_t reg, uint8_t value)
 {
@@ -604,7 +650,7 @@ static int hm_htpa_init(const struct device *dev)
 		return -ENODEV;
 	}
 
-	if (0 != htpa_flash_read_calibration(dev, &data->calib)) {
+	if (htpa_flash_read_calibration(dev, &data->calib) != 0) {
 		LOG_ERR("Error reading calibration data");
 		return -EINVAL;
 	}
