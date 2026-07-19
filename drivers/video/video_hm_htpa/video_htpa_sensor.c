@@ -506,7 +506,7 @@ static void hm_htpa_worker(void *p1, void *p2, void *p3)
 	}
 }
 
-static int hm_htpa_get_caps(const struct device *dev, struct video_caps *caps)
+static int htpa_api_get_caps(const struct device *dev, struct video_caps *caps)
 {
 	const struct htpa_config *cfg = dev->config;
 
@@ -518,7 +518,7 @@ static int hm_htpa_get_caps(const struct device *dev, struct video_caps *caps)
 	return 0;
 }
 
-static int hm_htpa_set_fmt(const struct device *dev, struct video_format *fmt)
+static int htpa_api_set_fmt(const struct device *dev, struct video_format *fmt)
 {
 	struct htpa_data *data = dev->data;
 
@@ -542,7 +542,7 @@ static int hm_htpa_set_fmt(const struct device *dev, struct video_format *fmt)
 	return 0;
 }
 
-static int hm_htpa_get_fmt(const struct device *dev, struct video_format *fmt)
+static int htpa_api_get_fmt(const struct device *dev, struct video_format *fmt)
 {
 	struct htpa_data *data = dev->data;
 
@@ -551,7 +551,7 @@ static int hm_htpa_get_fmt(const struct device *dev, struct video_format *fmt)
 	return 0;
 }
 
-static int hm_htpa_set_stream(const struct device *dev, bool enable, enum video_buf_type type)
+static int htpa_api_set_stream(const struct device *dev, bool enable, enum video_buf_type type)
 {
 	struct htpa_data *data = dev->data;
 
@@ -571,7 +571,7 @@ static int hm_htpa_set_stream(const struct device *dev, bool enable, enum video_
 	return 0;
 }
 
-static int hm_htpa_enqueue(const struct device *dev, struct video_buffer *vbuf)
+static int htpa_api_enqueue(const struct device *dev, struct video_buffer *vbuf)
 {
 	struct htpa_data *data = dev->data;
 	struct video_format *fmt = &data->fmt;
@@ -604,8 +604,8 @@ static int hm_htpa_enqueue(const struct device *dev, struct video_buffer *vbuf)
 	return 0;
 }
 
-static int hm_htpa_dequeue(const struct device *dev, struct video_buffer **vbuf,
-			   k_timeout_t timeout)
+static int htpa_api_dequeue(const struct device *dev, struct video_buffer **vbuf,
+			    k_timeout_t timeout)
 {
 	struct htpa_data *data = dev->data;
 
@@ -617,7 +617,7 @@ static int hm_htpa_dequeue(const struct device *dev, struct video_buffer **vbuf,
 	return 0;
 }
 
-static int hm_htpa_flush(const struct device *dev, bool cancel)
+static int htpa_api_flush(const struct device *dev, bool cancel)
 {
 	struct htpa_data *data = dev->data;
 	struct video_buffer *vbuf;
@@ -655,17 +655,17 @@ static int hm_htpa_flush(const struct device *dev, bool cancel)
 	return 0;
 }
 
-static DEVICE_API(video, hm_htpa_api) = {
-	.set_format = hm_htpa_set_fmt,
-	.get_format = hm_htpa_get_fmt,
-	.set_stream = hm_htpa_set_stream,
-	.get_caps = hm_htpa_get_caps,
-	.enqueue = hm_htpa_enqueue,
-	.dequeue = hm_htpa_dequeue,
-	.flush = hm_htpa_flush,
+static DEVICE_API(video, htpa_api) = {
+	.set_format = htpa_api_set_fmt,
+	.get_format = htpa_api_get_fmt,
+	.set_stream = htpa_api_set_stream,
+	.get_caps = htpa_api_get_caps,
+	.enqueue = htpa_api_enqueue,
+	.dequeue = htpa_api_dequeue,
+	.flush = htpa_api_flush,
 };
 
-static int hm_htpa_init(const struct device *dev)
+static int htpa_init(const struct device *dev)
 {
 	const struct htpa_config *cfg = dev->config;
 	struct htpa_data *data = dev->data;
@@ -766,9 +766,9 @@ static int hm_htpa_init(const struct device *dev)
 		.spi = SPI_DT_SPEC_INST_GET(inst, SPI_OP_MODE_MASTER | SPI_WORD_SET(8) |           \
 							  SPI_LINES_SINGLE),                       \
 	};                                                                                         \
-	DEVICE_DT_INST_DEFINE(inst, hm_htpa_init, NULL, &hm_htpa_data_##model##_##inst,            \
+	DEVICE_DT_INST_DEFINE(inst, htpa_init, NULL, &hm_htpa_data_##model##_##inst,            \
 			      &hm_htpa_cfg_##model##_##inst, POST_KERNEL,                          \
-			      CONFIG_VIDEO_INIT_PRIORITY, &hm_htpa_api);
+			      CONFIG_VIDEO_INIT_PRIORITY, &htpa_api);
 
 #if defined(CONFIG_DT_HAS_HEIMANN_HTPA_120X84_ENABLED)
 
