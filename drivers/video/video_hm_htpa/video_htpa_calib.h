@@ -9,7 +9,7 @@
 
 #include <stdint.h>
 
-typedef struct {
+struct htpa_calib{
 	/* EEPROM calibration data */
 	uint8_t mbit_calib;
 	uint8_t bias_calib;
@@ -22,8 +22,8 @@ typedef struct {
 	uint8_t bpa_user;
 	uint8_t pu_user;
 	uint32_t id;
-} heimann_calibration_t;
+};
 
-int htpa_read_calibration(const struct device *dev, heimann_calibration_t *calib);
+int htpa_read_calibration(const struct device *dev, struct htpa_calib *calib);
 
 #endif /* ZEPHYR_DRIVERS_VIDEO_VIDEO_HM_HTPA_VIDEO_HTPA_CALIB_H_ */

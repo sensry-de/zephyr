@@ -38,7 +38,7 @@ static uint8_t read_flash_bytewise(const struct device *dev, unsigned int addres
  * Read a small subset of the sensor calibration data, which is typically much larger.
  * This will be extended as more processing is added.
  */
-int htpa_read_calibration(const struct device *dev, heimann_calibration_t *calib)
+int htpa_read_calibration(const struct device *dev, struct htpa_calib *calib)
 {
 	const struct htpa_config *cfg = dev->config;
 	const struct htpa_sensor_config *sensor = cfg->sensor;
