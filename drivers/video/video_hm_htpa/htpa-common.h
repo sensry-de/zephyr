@@ -35,7 +35,10 @@ struct hm_htpa_config {
 	const struct hm_htpa_sensor_config *sensor;
 };
 
-#define HTPA_FRAME_QUEUE_SIZE 2
+#define HTPA_FRAME_QUEUE_SIZE      2
+#define HTPA_CONVERSION_TIMEOUT_MS 100U
+#define HTPA_FRAME_TIMEOUT_MS(block_count)                                                         \
+	(((block_count) + 1U) * HTPA_CONVERSION_TIMEOUT_MS * 2U + MSEC_PER_SEC)
 
 struct hm_htpa_frame {
 	void *fifo_reserved;

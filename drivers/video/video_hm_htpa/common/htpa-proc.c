@@ -10,7 +10,6 @@
 
 #include "htpa-common.h"
 #include "htpa-proc.h"
-#include "htpa-sens.h"
 
 #define HTPA_AUTOSCALE_CLIP_PERCENT 1U
 

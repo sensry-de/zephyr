@@ -9,7 +9,6 @@ if(CONFIG_VIDEO_HEIMANN_HTPA)
   zephyr_library_sources(
     common/htpa-calib.c
     common/htpa-proc.c
-    common/htpa-sens.c
     htpa-common.c
   )
 endif()
