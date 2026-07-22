@@ -76,6 +76,7 @@ struct htpa_config {
 #define HTPA_CONVERSION_TIMEOUT_MS 100U
 #define HTPA_FRAME_TIMEOUT_MS(block_count)                                                         \
 	(((block_count) + 1U) * HTPA_CONVERSION_TIMEOUT_MS * 2U + MSEC_PER_SEC)
+#define HTPA_MIN_IN_BUF_COUNT      2
 
 struct htpa_data {
 	struct spi_dt_spec spi;
@@ -669,7 +670,7 @@ static int htpa_api_get_caps(const struct device *dev, struct video_caps *caps)
 
 	caps->type = VIDEO_BUF_TYPE_OUTPUT;
 	caps->format_caps = cfg->hm_htpa_caps;
-	caps->min_vbuf_count = 1;
+	caps->min_vbuf_count = HTPA_MIN_IN_BUF_COUNT;
 	caps->buf_align = sizeof(uint16_t);
 
 	return 0;
