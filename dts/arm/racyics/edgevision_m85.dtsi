@@ -40,6 +40,13 @@
 			status = "okay";
 		};
 
+		dtimer1: dtimer@40050000 {
+			compatible = "arm,cmsdk-dtimer";
+			reg = <0x40050000 0x1000>;
+			interrupts = <4 3>;
+			status = "okay";
+		};
+
 		sram0: memory@1000000 {
 			compatible = "mmio-sram";
 			reg = <0x01000000 DT_SIZE_K(1024)>;
