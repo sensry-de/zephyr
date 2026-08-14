@@ -7,6 +7,7 @@
 #include <mem.h>
 #include <arm/armv8.1-m.dtsi>
 #include <freq.h>
+#include <zephyr/dt-bindings/display/panel.h>
 
 / {
 	sysclk: system-clock {
@@ -44,6 +45,15 @@
 			compatible = "arm,cmsdk-dtimer";
 			reg = <0x40050000 0x1000>;
 			interrupts = <4 3>;
+			status = "okay";
+		};
+
+		qspi_display: qspi-display@40069000 {
+			compatible = "racyics,qspi-display";
+			reg = <0x40069000 0x78>;
+			width = <466>;
+			height = <466>;
+			pixel-format = <PANEL_PIXEL_FORMAT_RGB_888>;
 			status = "okay";
 		};
 
