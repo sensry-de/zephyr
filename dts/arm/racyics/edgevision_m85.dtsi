@@ -57,7 +57,7 @@
 			status = "okay";
 		};
 
-		sram0: memory@1000000 {
+		itcm: memory@1000000 {
 			compatible = "mmio-sram";
 			reg = <0x01000000 DT_SIZE_K(1024)>;
 		};
