@@ -1,0 +1,31 @@
+# Copyright (c) 2026 Racyics GmbH.
+# SPDX-License-Identifier: Apache-2.0
+
+
+title: |
+  Racyics QSPI display driver
+
+description: | 
+  Summary -> TODO
+
+  Here is an example to define a display device:
+
+  \ {
+        qspi-display@123456{
+          compatible = "racyics,qspi-display";
+          reg = <0x123456 0x123456>
+          width = <123456>;
+          height = <123456>;
+          pixel-format = <PANEL_PIXEL_FORMAT_RGB_888>;
+
+          status = "okay";
+      };
+  };
+
+compatible: "racyics,qspi-display"
+
+include : [display-controller.yaml, lcd-controller.yaml]
+
+properties:
+  reg:
+    required: true
