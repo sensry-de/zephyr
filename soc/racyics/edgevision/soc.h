@@ -8,4 +8,6 @@
 
 #include <cmsis_core_m_defaults.h>
 
+#include "ri_hwaccess.h"
+
 #endif /* ZEPHYR_SOC_RAYCICS_EDGEVISION_EV1X_COMMON_SOC_H_ */
