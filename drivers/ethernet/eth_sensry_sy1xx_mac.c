@@ -180,7 +180,7 @@ static void sy1xx_read_ctrl(const struct device *dev)
 	uint32_t register_dump[13] = {0};
 
 	for (uint32_t i = 0; i < 13; i++) {
-		register_dump[i] = sys_read32(cfg->ctrl_addr + i);
+		register_dump[i] = sys_read32(cfg->ctrl_addr + (i*4));
 	}
 
 	LOG_HEXDUMP_INF(register_dump, sizeof(register_dump), "ctrl>");
