@@ -7,7 +7,7 @@
 #define DT_DRV_COMPAT sensry_sy1xx_mac
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(sy1xx_mac, CONFIG_ETHERNET_LOG_LEVEL);
+LOG_MODULE_REGISTER(sy1xx_mac, LOG_LEVEL_DBG);
 
 #include <sys/types.h>
 #include <zephyr/kernel.h>
@@ -171,6 +171,19 @@ static void sy1xx_mac_set_mac_addr(const struct device *dev)
 	v_high = sys_read32(cfg->ctrl_addr + SY1XX_MAC_ADDRESS_HIGH_REG);
 	v_high |= (v_high & 0xffff0000) | sys_get_le16(&data->mac_addr[4]);
 	sys_write32(v_high, cfg->ctrl_addr + SY1XX_MAC_ADDRESS_HIGH_REG);
+}
+
+static void sy1xx_read_ctrl(const struct device *dev)
+{
+	struct sy1xx_mac_dev_config *cfg = (struct sy1xx_mac_dev_config *)dev->config;
+
+	uint32_t register_dump[13] = {0};
+
+	for (uint32_t i = 0; i < 13; i++) {
+		register_dump[i] = sys_read32(cfg->ctrl_addr + i);
+	}
+
+	LOG_HEXDUMP_INF(register_dump, sizeof(register_dump), "ctrl>");
 }
 
 static int sy1xx_mac_start(const struct device *dev, struct net_if *iface __unused)
@@ -416,6 +429,10 @@ static int sy1xx_mac_low_level_receive(const struct device *dev, uint8_t *rx, ui
 		memcpy(rx, data->dma_buffers->rx, bytes_transferred);
 		*len = bytes_transferred;
 		ret = 0;
+
+		sy1xx_read_ctrl(dev);
+		LOG_HEXDUMP_INF(rx, bytes_transferred, "rx>");
+
 	} else {
 		/* no data, should never happen */
 		SY1XX_UDMA_CANCEL_RX(cfg->base_addr);

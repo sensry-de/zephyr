@@ -5,7 +5,7 @@
  */
 
 #include <zephyr/logging/log.h>
-LOG_MODULE_REGISTER(net_promisc_sample, LOG_LEVEL_INF);
+LOG_MODULE_REGISTER(net_promisc_sample, LOG_LEVEL_DBG);
 
 #include <zephyr/kernel.h>
 #include <errno.h>
@@ -234,6 +234,14 @@ int main(void)
 	struct net_pkt *pkt;
 
 	net_if_foreach(iface_cb, NULL);
+
+	struct net_if *iface;
+	iface = net_if_get_by_index(1);
+	if (0 == net_promisc_mode_on(iface)) {
+		LOG_INF("Promiscuous mode enabled");
+	} else {
+		LOG_ERR("Cannot enable promiscuous mode for interface %p", iface);
+	}
 
 	while (1) {
 		pkt = net_promisc_mode_wait_data(K_FOREVER);
