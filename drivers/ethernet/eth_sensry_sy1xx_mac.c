@@ -145,9 +145,9 @@ static int sy1xx_mac_set_promiscuous_mode(const struct device *dev, bool promisc
 	/* set promiscuous mode */
 	prom = sys_read32(cfg->ctrl_addr + SY1XX_MAC_ADDRESS_HIGH_REG);
 	if (promiscuous_mode) {
-		prom &= ~BIT(16);
-	} else {
 		prom |= BIT(16);
+	} else {
+		prom &= ~BIT(16);
 	}
 	sys_write32(prom, cfg->ctrl_addr + SY1XX_MAC_ADDRESS_HIGH_REG);
 
