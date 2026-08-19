@@ -7,6 +7,7 @@
 #define ZEPHYR_SOC_RAYCICS_EDGEVISION_EV1X_COMMON_SOC_H_
 
 #include <cmsis_core_m_defaults.h>
+#include <edgevision_top_memmap_regs_macroacc.h>
 
 #include "ri_hwaccess.h"
 
