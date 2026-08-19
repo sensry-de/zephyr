@@ -52,6 +52,7 @@ struct ri_qspi_data {
     uint8_t                pixel_format;
     uint8_t*               frame_buf_p;             //!< Frame buffer
     uint32_t               frame_buf_size8;         //!< size of the frame buffer
+    ri_qspi_display_cmd_t  display_command;
 };
 
 
@@ -78,21 +79,11 @@ static ri_qspi_job_t spi_job = {
     .wait_event      = true
 };
 
-static ri_qspi_display_cmd_t display_command = {
-    .read_en        = 0,
-    .address        = 0x00,
-    .len            = 0x00,
-    .wr_data_byte_0 = 0x00,
-    .wr_data_byte_1 = 0x00,
-    .wr_data_byte_2 = 0x00,
-    .wr_data_byte_3 = 0x00
-};
-
 /* Helper declarations */
 static void config_spi_m (ri_qspi_dev_t cfg);
 static int config_pixel_format (const struct device *dev);
 static void display_reset(void);
-static void display_init(void);
+static void display_init(ri_qspi_display_cmd_t* cmd_p);
 static void poll_qspi_display_ctrl_status_idle ();
 static void config_RDMA (uint8_t* buf, uint32_t len8);
 static void exec_spi_job (ri_qspi_job_t* job);
@@ -407,70 +398,70 @@ void exec_display_command(ri_qspi_display_cmd_t* cmd_p)
     exec_spi_job (&spi_job);
 }
 
-void display_init()
+void display_init(ri_qspi_display_cmd_t* cmd_p)
 {
 
     switch_spi_mode();
 
     switch_qspi_mode();
 
-    display_command.read_en         = 0; // write
-    display_command.len             = 1;
+    cmd_p->read_en         = 0; // write
+    cmd_p->len             = 1;
 
-    display_command.address         = 0xFE; // UCS CMD1 (default page after power-on )
-    display_command.wr_data_byte_0  = 0x00;
-    exec_display_command(&display_command);
+    cmd_p->address         = 0xFE; // UCS CMD1 (default page after power-on )
+    cmd_p->wr_data_byte_0  = 0x00;
+    exec_display_command(cmd_p);
 
-    display_command.address         = 0xC4; // set SPI mode
-    display_command.wr_data_byte_0  = 0x80; // SPI write SRAM enable
-    exec_display_command(&display_command);
+    cmd_p->address         = 0xC4; // set SPI mode
+    cmd_p->wr_data_byte_0  = 0x80; // SPI write SRAM enable
+    exec_display_command(cmd_p);
 
-    display_command.address         = 0x3A; // COLMOD: Interface Pixel Format
-    display_command.wr_data_byte_0  = (BYTES_PER_PIXEL == 2) ? 0x55 : 0x77; // 16bit/pixel : 24bit/pixel
-    exec_display_command(&display_command);
+    cmd_p->address         = 0x3A; // COLMOD: Interface Pixel Format
+    cmd_p->wr_data_byte_0  = (BYTES_PER_PIXEL == 2) ? 0x55 : 0x77; // 16bit/pixel : 24bit/pixel
+    exec_display_command(cmd_p);
 
-    display_command.address         = 0x35; // TEON: Tearing Effect Line ON
-    // display_command.address         = 0x34; // TEOFF: Tearing Effect Line OFF
-    display_command.wr_data_byte_0  = 0x00; //
-    exec_display_command(&display_command);
+    cmd_p->address         = 0x35; // TEON: Tearing Effect Line ON
+    // cmd_p->address         = 0x34; // TEOFF: Tearing Effect Line OFF
+    cmd_p->wr_data_byte_0  = 0x00; //
+    exec_display_command(cmd_p);
 
-    display_command.address         = 0x53; // WRCTRLD: Write CTRL Display
-    display_command.wr_data_byte_0  = 0x20; // [5] Brighness Control Block ON; [3] Display dimming OFF
-    exec_display_command(&display_command);
+    cmd_p->address         = 0x53; // WRCTRLD: Write CTRL Display
+    cmd_p->wr_data_byte_0  = 0x20; // [5] Brighness Control Block ON; [3] Display dimming OFF
+    exec_display_command(cmd_p);
 
-    display_command.address         = 0x51; // WRDISBV: Write Display Brightness
-    display_command.wr_data_byte_0  = 0x00; // 0% initial (then fade in)
-    exec_display_command(&display_command);
+    cmd_p->address         = 0x51; // WRDISBV: Write Display Brightness
+    cmd_p->wr_data_byte_0  = 0x00; // 0% initial (then fade in)
+    exec_display_command(cmd_p);
 
-    display_command.address         = 0x63; // WRHBMDISBV: Write HBM Display Brightness
-    display_command.wr_data_byte_0  = 0x7F; // 50% // MARKER: Test reg for readbacks
-    exec_display_command(&display_command);
+    cmd_p->address         = 0x63; // WRHBMDISBV: Write HBM Display Brightness
+    cmd_p->wr_data_byte_0  = 0x7F; // 50% // MARKER: Test reg for readbacks
+    exec_display_command(cmd_p);
 
-    display_command.len             = 4;
+    cmd_p->len             = 4;
 
-    display_command.address         = 0x2A; // CASET: Set Column Start Address
-    display_command.wr_data_byte_0  = 0x00; // start column [9:8]
-    display_command.wr_data_byte_1  = 0x06; // start column [7:0] - 6
-    display_command.wr_data_byte_2  = 0x01; //   end column [9:8]
-    display_command.wr_data_byte_3  = 0xD7; //   end column [7:0] - 471
-    exec_display_command(&display_command);
+    cmd_p->address         = 0x2A; // CASET: Set Column Start Address
+    cmd_p->wr_data_byte_0  = 0x00; // start column [9:8]
+    cmd_p->wr_data_byte_1  = 0x06; // start column [7:0] - 6
+    cmd_p->wr_data_byte_2  = 0x01; //   end column [9:8]
+    cmd_p->wr_data_byte_3  = 0xD7; //   end column [7:0] - 471
+    exec_display_command(cmd_p);
 
-    display_command.address         = 0x2B; // RASET: Set Row Start Address
-    display_command.wr_data_byte_0  = 0x00; // start row [9:8]
-    display_command.wr_data_byte_1  = 0x00; // start row [7:0] - 0
-    display_command.wr_data_byte_2  = 0x01; //   end row [9:8]
-    display_command.wr_data_byte_3  = 0xD1; //   end row [7:0] - 465
-    exec_display_command(&display_command);
+    cmd_p->address         = 0x2B; // RASET: Set Row Start Address
+    cmd_p->wr_data_byte_0  = 0x00; // start row [9:8]
+    cmd_p->wr_data_byte_1  = 0x00; // start row [7:0] - 0
+    cmd_p->wr_data_byte_2  = 0x01; //   end row [9:8]
+    cmd_p->wr_data_byte_3  = 0xD1; //   end row [7:0] - 465
+    exec_display_command(cmd_p);
 
-    display_command.len             = 0;
+    cmd_p->len             = 0;
 
-    display_command.address         = 0x11; // SLPOUT: Sleep Out
-    exec_display_command(&display_command);
+    cmd_p->address         = 0x11; // SLPOUT: Sleep Out
+    exec_display_command(cmd_p);
 
     ri_wait_ms(200); // min 120ms sleep out time, until next command is accepted
 
-    display_command.address         = 0x29; // DISPON: Display On
-    exec_display_command(&display_command);
+    cmd_p->address         = 0x29; // DISPON: Display On
+    exec_display_command(cmd_p);
 
 #if 1
     // !!! ATTENTION !!! Dont ues this with the flatcable variant! Readback might cause damage, driver of display drives against level shifter
@@ -478,76 +469,76 @@ void display_init()
     switch_spi_mode();
 
     // read back CASET and RASET (for debugging)
-    display_command.read_en         = 1; // read
-    display_command.len             = 4;
+    cmd_p->read_en         = 1; // read
+    cmd_p->len             = 4;
 
-    display_command.address         = 0x2A; // CASET: Set Column Start Address
-    exec_display_command(&display_command);
+    cmd_p->address         = 0x2A; // CASET: Set Column Start Address
+    exec_display_command(cmd_p);
     uint32_t reg_val;
     reg_val = READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
     LOG_DBG("read CASET");
     LOG_DBG("start column = %6d"  , ( ( reg_val >> 16) & 0x0000FFFF));
     LOG_DBG(" end column = %6d",           ( reg_val        & 0x0000FFFF));
 
-    display_command.address         = 0x2B; // RASET: Set Row Start Address
-    exec_display_command(&display_command);
+    cmd_p->address         = 0x2B; // RASET: Set Row Start Address
+    exec_display_command(cmd_p);
     reg_val = READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
     LOG_DBG("read RASET");
     LOG_DBG("start    row = %6d"  , ( ( reg_val >> 16) & 0x0000FFFF));
     LOG_DBG(        " end    row = %6d",           ( reg_val        & 0x0000FFFF));
 
-    display_command.len             = 1;
+    cmd_p->len             = 1;
 
-    display_command.address         = 0xFE; // UCS CMD1 (default page after power-on )
-    exec_display_command(&display_command);
+    cmd_p->address         = 0xFE; // UCS CMD1 (default page after power-on )
+    exec_display_command(cmd_p);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
-    display_command.address         = 0xC4; // set SPI mode
-    exec_display_command(&display_command);
+    LOG_DBG("read from 0x%6x = 0x%02x",cmd_p->address,reg_val);
+    cmd_p->address         = 0xC4; // set SPI mode
+    exec_display_command(cmd_p);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
-    display_command.address         = 0x3A; // COLMOD: Interface Pixel Format
-    exec_display_command(&display_command);
+    LOG_DBG("read from 0x%6x = 0x%02x",cmd_p->address,reg_val);
+    cmd_p->address         = 0x3A; // COLMOD: Interface Pixel Format
+    exec_display_command(cmd_p);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
-    display_command.address         = 0x35; // TEON: Tearing Effect Line ON
-    exec_display_command(&display_command);
+    LOG_DBG("read from 0x%6x = 0x%02x",cmd_p->address,reg_val);
+    cmd_p->address         = 0x35; // TEON: Tearing Effect Line ON
+    exec_display_command(cmd_p);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
-    display_command.address         = 0x53; // WRCTRLD: Write CTRL Display
-    exec_display_command(&display_command);
+    LOG_DBG("read from 0x%6x = 0x%02x",cmd_p->address,reg_val);
+    cmd_p->address         = 0x53; // WRCTRLD: Write CTRL Display
+    exec_display_command(cmd_p);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
-    display_command.address         = 0x51; // WRDISBV: Write Display Brightness
-    exec_display_command(&display_command);
+    LOG_DBG("read from 0x%6x = 0x%02x",cmd_p->address,reg_val);
+    cmd_p->address         = 0x51; // WRDISBV: Write Display Brightness
+    exec_display_command(cmd_p);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
+    LOG_DBG("read from 0x%6x = 0x%02x",cmd_p->address,reg_val);
 
-    display_command.address         = 0x63; // WRHBMDISBV: Write HBM Display Brightness
-    exec_display_command(&display_command);
+    cmd_p->address         = 0x63; // WRHBMDISBV: Write HBM Display Brightness
+    exec_display_command(cmd_p);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
+    LOG_DBG("read from 0x%6x = 0x%02x",cmd_p->address,reg_val);
 
-    display_command.address         = 0x0A;
-    exec_display_command(&display_command);
+    cmd_p->address         = 0x0A;
+    exec_display_command(cmd_p);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
+    LOG_DBG("read from 0x%6x = 0x%02x",cmd_p->address,reg_val);
 
-    display_command.address         = 0xc3;
-    exec_display_command(&display_command);
+    cmd_p->address         = 0xc3;
+    exec_display_command(cmd_p);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
+    LOG_DBG("read from 0x%6x = 0x%02x",cmd_p->address,reg_val);
 
-    display_command.address         = 0xc5;
-    exec_display_command(&display_command);
+    cmd_p->address         = 0xc5;
+    exec_display_command(cmd_p);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
+    LOG_DBG("read from 0x%6x = 0x%02x",cmd_p->address,reg_val);
 
 
     MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, (0x1 << 6), (0x0 << 6));  // Trigger 0 SPARE1 (Rubin board X7-1)
 
-    display_command.read_en         = 0;
-    display_command.len             = 4;
+    cmd_p->read_en         = 0;
+    cmd_p->len             = 4;
 
     switch_qspi_mode();
 
@@ -628,13 +619,14 @@ void exec_spi_job (ri_qspi_job_t* job_p)
 static int ri_qspi_display_init(const struct device *dev) {
 
     const struct ri_qspi_cfg *cfg = dev->config;
+    struct ri_qspi_data *data = dev->data;
     int err = 0;
 
     config_spi_m(cfg->qspi_dev);
     switch_spi_mode();
     config_pixel_format(dev);
     display_reset();
-    display_init();
+    display_init(&data->display_command);
 
     LOG_INF("QSPI display %d initialized: %dx%d", cfg->id, cfg->x_res, cfg->y_res);
 
@@ -695,13 +687,15 @@ static void *ri_qspi_display_get_framebuffer(const struct device *dev)
 static int ri_qspi_display_set_brightness( const struct device *dev,
 					                        const uint8_t brightness)
 {
-    display_command.len     = 1;
-    display_command.address = 0x51; // WRDISBV: Write Display Brightness
+    struct ri_qspi_data *data = dev->data;
+
+    data->display_command.len     = 1;
+    data->display_command.address = 0x51; // WRDISBV: Write Display Brightness
     uint8_t clipped_brightness = MIN(QSPI_DISP_MAX_BRIGHTNESS, brightness); // clip to maximum
 
     LOG_DBG("brightness %d", clipped_brightness);
-    display_command.wr_data_byte_0  = clipped_brightness;
-    exec_display_command(&display_command);
+    data->display_command.wr_data_byte_0  = clipped_brightness;
+    exec_display_command(&data->display_command);
 
     LOG_INF("Brightness set to %u", brightness);
 
@@ -744,6 +738,7 @@ static DEVICE_API(display, ri_qspi_display_api) = {
         .pixel_format = DT_INST_PROP(inst, pixel_format),               \
         .frame_buf_p = &buffer_##inst[0],                               \
         .frame_buf_size8 = sizeof(buffer_##inst),                       \
+        .display_command = (ri_qspi_display_cmd_t){0},                  \
     };                                                                  \
                                                                         \
     DEVICE_DT_INST_DEFINE(  inst, ri_qspi_display_init,                 \
