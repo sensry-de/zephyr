@@ -33,11 +33,6 @@ LOG_MODULE_REGISTER(display_racyics_qspi, CONFIG_DISPLAY_LOG_LEVEL);
 
 #define RI_QSPI_DISPLAY_PIXEL_SIZE(inst) ( DISPLAY_BITS_PER_PIXEL(DT_INST_PROP(inst, pixel_format)) / BITS_PER_BYTE )
 
-
-#define PRINTF_D LOG_DBG
-#define PRINTF_ERROR LOG_ERR
-#define PRINTF LOG_DBG
-
 #define ri_wait_ms k_msleep
 #define ri_wait_us k_usleep
 
@@ -251,7 +246,7 @@ int copy_image_line_3bpp_to_4bpp_optimized(
 
 void config_spi_m (ri_qspi_dev_t cfg)
 {
-    PRINTF("config_spi_m: write SPI master configuration");
+    LOG_DBG("Writing SPI master configuration");
 
     // poll_spi_master_status_idle();
     MODIFYREG(RI_QSPI_DISPLAY_QSPI_MASTER_CFG_ITF_REG      ,  RI_QSPI_MASTER_REGFILE__CFG_ITF__SPI_MODE__FIELD       ,              RI_QSPI_MASTER_REGFILE__CFG_ITF__SPI_MODE_SNGL_SPI__E); // begin with single SPI
@@ -265,7 +260,6 @@ void config_spi_m (ri_qspi_dev_t cfg)
     MODIFYREG(RI_QSPI_DISPLAY_QSPI_MASTER_CFG_SS_TIMING_REG,  RI_QSPI_MASTER_REGFILE__CFG_SS_TIMING__SETUP__FIELD    , (cfg.css << RI_QSPI_MASTER_REGFILE__CFG_SS_TIMING__SETUP__SHIFT));
     MODIFYREG(RI_QSPI_DISPLAY_QSPI_MASTER_CFG_SS_TIMING_REG,  RI_QSPI_MASTER_REGFILE__CFG_SS_TIMING__HOLD__FIELD     , (cfg.csh << RI_QSPI_MASTER_REGFILE__CFG_SS_TIMING__HOLD__SHIFT));
     MODIFYREG(RI_QSPI_DISPLAY_QSPI_MASTER_CFG_SS_TIMING_REG,  RI_QSPI_MASTER_REGFILE__CFG_SS_TIMING__INACTIVE__FIELD , (cfg.csi << RI_QSPI_MASTER_REGFILE__CFG_SS_TIMING__INACTIVE__SHIFT));
-    PRINTF(" - DONE\n");
 }
 
 int config_pixel_format (const struct device *dev)
@@ -276,12 +270,12 @@ int config_pixel_format (const struct device *dev)
     // sanity check
     uint32_t min_buf_size = (cfg->x_res * cfg->y_res * data->pixel_size);
     if (data->frame_buf_size8 < min_buf_size) {
-        PRINTF_ERROR("Frame buffer size (%d) is under the minimum (%d). Please reserve more space\n", 
+        LOG_ERR("Frame buffer size (%d) is under the minimum (%d). Please reserve more space", 
                 data->frame_buf_size8, min_buf_size);
         return 1;
     }
 
-    PRINTF_D("configure pixel format");
+    LOG_DBG("configure pixel format");
     // source pixel format & display pixel format (sink)
     switch (data->pixel_size) {
       case PIXEL_SIZE08:
@@ -301,12 +295,11 @@ int config_pixel_format (const struct device *dev)
         MODIFYREG(RI_QSPI_DISPLAY_DISP_CTRL_CFG_REG, RI_QSPI_DISP_REGFILE__CFG__PX_DWIDTH_SNK__FIELD, (RI_QSPI_DISP_REGFILE__CFG__PX_DWIDTH_SNK_PX_32_BIT__E));
         break;
       default:
-        PRINTF_ERROR("Unsupported pixel size. Supported pixel sizes are {8,16,24,32} bit.");
+        LOG_ERR("Unsupported pixel size. Supported pixel sizes are {8,16,24,32} bit.");
         break;
     }
     
     MODIFYREG(RI_QSPI_DISPLAY_DISP_CTRL_CFG_REG,  RI_QSPI_DISP_REGFILE__CFG__PX_CONVERT_SELECT__FIELD, (0x0 << RI_QSPI_DISP_REGFILE__CFG__PX_CONVERT_SELECT__SHIFT));
-    PRINTF_D(" - DONE\n");
 
     return 0;
 }
@@ -323,9 +316,8 @@ void switch_qspi_mode (void)
 
     ri_wait_us(10); // FIXME (without the PRINT_D's around this line)
 
-    PRINTF_D("\nconfigure SPI master to QSPI mode");
+    LOG_DBG("\nconfigure SPI master to QSPI mode");
     MODIFYREG(RI_QSPI_DISPLAY_QSPI_MASTER_CFG_ITF_REG, RI_QSPI_MASTER_REGFILE__CFG_ITF__SPI_MODE__FIELD, RI_QSPI_MASTER_REGFILE__CFG_ITF__SPI_MODE_QUAD_SPI__E);    // switch to quad SPI mode
-    PRINTF_D(" - DONE\n");
 }
 
 void switch_spi_mode (void)
@@ -338,9 +330,8 @@ void switch_spi_mode (void)
 
     exec_spi_job (&spi_job);
 
-    PRINTF_D("\nconfigure SPI master to SPI mode");
+    LOG_DBG("\nconfigure SPI master to SPI mode");
     MODIFYREG(RI_QSPI_DISPLAY_QSPI_MASTER_CFG_ITF_REG, RI_QSPI_MASTER_REGFILE__CFG_ITF__SPI_MODE__FIELD, RI_QSPI_MASTER_REGFILE__CFG_ITF__SPI_MODE_SNGL_SPI__E);    // switch to normal SPI mode
-    PRINTF_D(" - DONE\n");
 }
 
 void poll_qspi_display_ctrl_status_idle () 
@@ -348,12 +339,12 @@ void poll_qspi_display_ctrl_status_idle ()
     uint32_t reg_val;
     while(1) {
         reg_val = READREG(RI_QSPI_DISPLAY_DISP_CTRL_STATUS_REG);
-        PRINTF_D("\nRead RI_QSPI_DISPLAY_DISP_CTRL_STATUS_REG = %X\n", reg_val);
+        LOG_DBG("\nRead RI_QSPI_DISPLAY_DISP_CTRL_STATUS_REG = %X", reg_val);
         if (reg_val == RI_QSPI_DISP_REGFILE__STATUS__STATE_IDLE__E) {
-            PRINTF_D("\nQSPI display control is IDLE -> continue");
+            LOG_DBG("\nQSPI display control is IDLE -> continue");
             break;
         } else {
-            PRINTF_D("\nQSPI display control is BUSY");
+            LOG_DBG("\nQSPI display control is BUSY");
             ;
         }
     }
@@ -361,9 +352,9 @@ void poll_qspi_display_ctrl_status_idle ()
 
 void config_RDMA (uint8_t* buf, uint32_t len8)
 {
-    PRINTF_D("\nconfigure RDMA\n");
-    PRINTF_D("DMA address  :%X\n", (uint32_t)buf);
-    PRINTF_D("DMA num bytes:%d\n", len8);
+    LOG_DBG("\nconfigure RDMA");
+    LOG_DBG("DMA address  :%X", (uint32_t)buf);
+    LOG_DBG("DMA num bytes:%d", len8);
     WRITEREG(RI_QSPI_DISPLAY_RDMA_RI_RDMA_REG_STARTADDR_REG, (uint32_t)buf);
     WRITEREG(RI_QSPI_DISPLAY_RDMA_RI_RDMA_REG_MAXSIZE_REG, len8);
     WRITEREG(RI_QSPI_DISPLAY_RDMA_RI_RDMA_REG_IRQ_STATUS_ENABLE_REG, 0x0);
@@ -373,30 +364,29 @@ void config_RDMA (uint8_t* buf, uint32_t len8)
 void display_reset()
 {
     MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, (0x1 << 31), (0x1 << 31));
-    PRINTF(" -    LED_YELLOW2_LED (fpga board) SHOULD BE ON\n");
+    LOG_DBG(" -    LED_YELLOW2_LED (fpga board) SHOULD BE ON");
     MODIFYREG(RBB_FPGA_TOP_OUT_1_REG, (0x1 << (RBB_REG__FPGA_TOP_OUT_1__OTHER_OUTS_0__SHIFT + 0)), (0x1 << (RBB_REG__FPGA_TOP_OUT_1__OTHER_OUTS_0__SHIFT + 0)));
-    PRINTF(" -    MIPI V2 PCB relevant,QSPI_33_EN -> 1 (voltag level translator activated)\n");
+    LOG_DBG(" -    MIPI V2 PCB relevant,QSPI_33_EN -> 1 (voltag level translator activated)");
     ri_wait_ms(100);
     // QSPI display reset:
-    PRINTF("reset QSPI display\n");
+    LOG_DBG("reset QSPI display");
     MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, (0x1 << 18), (0x0 << 18));
     
     ri_wait_ms(200);    // reset pulse 100ms
     
     MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, (0x1 << 19), (0x1 << 19));
-    PRINTF(" -    QSPI DISP VCI SHOULD BE ON\n");
+    LOG_DBG(" -    QSPI DISP VCI SHOULD BE ON");
 
     ri_wait_ms(200);    // reset pulse 100ms
 
-    PRINTF("deassertsource_interna reset QSPI display\n");
+    LOG_DBG("deassertsource_interna reset QSPI display");
     MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, (0x1 << 18), (0x1 << 18));
     
     ri_wait_ms(200);     // data sheet:PowerOnSequence: T3(RESET high to first command) min 10ms
     
     MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, (0x1 << 24), (0x1 << 24)); 
-    PRINTF(" -    MIPI CLK200 switched ON, LED SHOULD BE OFF\n");
+    LOG_DBG(" -    MIPI CLK200 switched ON, LED SHOULD BE OFF");
 
-    PRINTF(" - DONE\n");
 }
 
 void exec_display_command(ri_qspi_display_cmd_t* cmd_p)
@@ -419,7 +409,6 @@ void exec_display_command(ri_qspi_display_cmd_t* cmd_p)
 
 void display_init()
 {
-    PRINTF("initialize QSPI display");
 
     switch_spi_mode();
 
@@ -496,63 +485,63 @@ void display_init()
     exec_display_command(&display_command);
     uint32_t reg_val;
     reg_val = READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    PRINTF("DEBUG: read CASET");
-    PRINTF("DEBUG: start column = %6d"  , ( ( reg_val >> 16) & 0x0000FFFF));
-    PRINTF(" end column = %6d\n",           ( reg_val        & 0x0000FFFF));
+    LOG_DBG("read CASET");
+    LOG_DBG("start column = %6d"  , ( ( reg_val >> 16) & 0x0000FFFF));
+    LOG_DBG(" end column = %6d",           ( reg_val        & 0x0000FFFF));
 
     display_command.address         = 0x2B; // RASET: Set Row Start Address
     exec_display_command(&display_command);
     reg_val = READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    PRINTF("DEBUG: read RASET");
-    PRINTF("DEBUG: start    row = %6d"  , ( ( reg_val >> 16) & 0x0000FFFF));
-    PRINTF(        " end    row = %6d\n",           ( reg_val        & 0x0000FFFF));
+    LOG_DBG("read RASET");
+    LOG_DBG("start    row = %6d"  , ( ( reg_val >> 16) & 0x0000FFFF));
+    LOG_DBG(        " end    row = %6d",           ( reg_val        & 0x0000FFFF));
 
     display_command.len             = 1;
 
     display_command.address         = 0xFE; // UCS CMD1 (default page after power-on )
     exec_display_command(&display_command);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    PRINTF("DEBUG: read from 0x%6x = 0x%02x\n",display_command.address,reg_val);
+    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
     display_command.address         = 0xC4; // set SPI mode
     exec_display_command(&display_command);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    PRINTF("DEBUG: read from 0x%6x = 0x%02x\n",display_command.address,reg_val);
+    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
     display_command.address         = 0x3A; // COLMOD: Interface Pixel Format
     exec_display_command(&display_command);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    PRINTF("DEBUG: read from 0x%6x = 0x%02x\n",display_command.address,reg_val);
+    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
     display_command.address         = 0x35; // TEON: Tearing Effect Line ON
     exec_display_command(&display_command);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    PRINTF("DEBUG: read from 0x%6x = 0x%02x\n",display_command.address,reg_val);
+    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
     display_command.address         = 0x53; // WRCTRLD: Write CTRL Display
     exec_display_command(&display_command);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    PRINTF("DEBUG: read from 0x%6x = 0x%02x\n",display_command.address,reg_val);
+    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
     display_command.address         = 0x51; // WRDISBV: Write Display Brightness
     exec_display_command(&display_command);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    PRINTF("DEBUG: read from 0x%6x = 0x%02x\n",display_command.address,reg_val);
+    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
 
     display_command.address         = 0x63; // WRHBMDISBV: Write HBM Display Brightness
     exec_display_command(&display_command);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    PRINTF("DEBUG: read from 0x%6x = 0x%02x\n",display_command.address,reg_val);
+    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
 
     display_command.address         = 0x0A;
     exec_display_command(&display_command);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    PRINTF("DEBUG: read from 0x%6x = 0x%02x\n",display_command.address,reg_val);
+    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
 
     display_command.address         = 0xc3;
     exec_display_command(&display_command);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    PRINTF("DEBUG: read from 0x%6x = 0x%02x\n",display_command.address,reg_val);
+    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
 
     display_command.address         = 0xc5;
     exec_display_command(&display_command);
     reg_val = 0xFF & READREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_READ_DATA_REG);
-    PRINTF("DEBUG: read from 0x%6x = 0x%02x\n",display_command.address,reg_val);
+    LOG_DBG("read from 0x%6x = 0x%02x",display_command.address,reg_val);
 
 
     MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, (0x1 << 6), (0x0 << 6));  // Trigger 0 SPARE1 (Rubin board X7-1)
@@ -563,7 +552,6 @@ void display_init()
     switch_qspi_mode();
 
 #endif
-    PRINTF("- DONE\n");
 }
 
 void display_image_write(const struct device *dev)
@@ -571,8 +559,8 @@ void display_image_write(const struct device *dev)
     const struct ri_qspi_cfg *cfg = dev->config;
     struct ri_qspi_data *data = dev->data;
     
-    PRINTF_D("\n------------------------\n");
-    PRINTF_D("write image to display\n");
+    LOG_DBG("------------------------");
+    LOG_DBG("write image to display");
 
     uint32_t  frame_size_display   = cfg->x_res * cfg->y_res * data->pixel_size;
     uint32_t  frame_size_memory    = cfg->x_res * cfg->y_res * data->pixel_size;
@@ -593,7 +581,6 @@ void display_image_write(const struct device *dev)
 
     WRITEREG(RI_QSPI_DISPLAY_DISP_CTRL_QSPI_DISP_CTRL_REG, 0x1); // clear buffers
 
-    PRINTF_D("- DONE\n");
 }
 
 void exec_spi_job (ri_qspi_job_t* job_p)
@@ -628,12 +615,12 @@ void exec_spi_job (ri_qspi_job_t* job_p)
     }
 
     WRITEREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_CMD_CTRL_1_REG,  1); // start SPI transfer
-    PRINTF_D("exec SPI job");
+    LOG_DBG("exec SPI job");
 
     if (job_p->wait_event == true) {
         poll_qspi_display_ctrl_status_idle();
     }
-    PRINTF_D(" - DONE\n");
+
 }
 
 /* API Functions */
@@ -649,6 +636,8 @@ static int ri_qspi_display_init(const struct device *dev) {
     display_reset();
     display_init();
 
+    LOG_INF("QSPI display %d initialized: %dx%d", cfg->id, cfg->x_res, cfg->y_res);
+
     return err;
 }
 
@@ -662,16 +651,16 @@ static int ri_qspi_display_image_write( const struct device *dev,
     int err = 0;
 
     if (!data->frame_buf_p || !buf) {
-        PRINTF_ERROR("ri_qspi_display_image_write: invalid buffer\n");
+        LOG_ERR("ri_qspi_display_image_write: invalid buffer");
         return 1;
     }
     if (data->frame_buf_p == buf) {
       // if image is already in frame buffer, set pixel format accordingly
-      PRINTF_D("Image already in buffer");
+      LOG_DBG("Image already in buffer");
       //data->pixel_size = image_p->pixel_size;
       config_pixel_format(dev);
     } else {
-        PRINTF_D("Compiling frame into buffer");
+        LOG_DBG("Compiling frame into buffer");
         compile_qspi_display_frame(dev, x, y, desc, buf);
     }
 
@@ -710,9 +699,11 @@ static int ri_qspi_display_set_brightness( const struct device *dev,
     display_command.address = 0x51; // WRDISBV: Write Display Brightness
     uint8_t clipped_brightness = MIN(QSPI_DISP_MAX_BRIGHTNESS, brightness); // clip to maximum
 
-    PRINTF_D("brightness %d\n", clipped_brightness);
+    LOG_DBG("brightness %d", clipped_brightness);
     display_command.wr_data_byte_0  = clipped_brightness;
     exec_display_command(&display_command);
+
+    LOG_INF("Brightness set to %u", brightness);
 
     return 0;
 }
