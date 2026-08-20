@@ -37,7 +37,7 @@ typedef struct {
     uint8_t wr_data_byte_13;
     uint8_t wr_data_byte_14;
     uint8_t wr_data_byte_15;
-    bool    wait_event;
+    bool    valid;
 } ri_qspi_job_t;
 
 typedef struct {
