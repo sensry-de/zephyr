@@ -74,7 +74,6 @@ static int  compile_qspi_display_frame(  const struct device *dev,
                                         const void *buf);
 
 static int  copy_image_line_3bpp_optimized(uint8_t* dst_row, const uint8_t* line_buffer, uint32_t copy_width, uint32_t img_px_size);
-static int  copy_image_line_3bpp_to_4bpp_optimized(uint8_t* dst_row, const uint8_t* line_buffer, uint32_t copy_width);
 
 /* Helper functions */
 
@@ -84,51 +83,52 @@ int compile_qspi_display_frame( const struct device *dev,
                                 const void *buf)
 {
 
+    LOG_DBG("");
+
     const struct ri_qspi_cfg *cfg = dev->config;
     struct ri_qspi_data *data = dev->data;
 
-    uint32_t image_width  = desc->width;
-    uint32_t image_height = desc->height;
-    uint32_t x_pos        = (uint32_t) x;
-    uint32_t y_pos        = (uint32_t) y;
-    uint32_t img_px_size  = data->pixel_size;
-    uint32_t fb_px_size   = data->pixel_size;
+    const uint8_t* img_buf_p = (const uint8_t*)buf;
+    uint8_t* frame_buf_p = data->frame_buf_p;
+    
+    uint32_t img_width  = desc->width;
+    uint32_t img_height = desc->height;    
+    uint32_t pixel_size  = data->pixel_size;
     uint32_t framebuffer_width   = cfg->x_res;
     uint32_t framebuffer_height  = cfg->y_res;
 
-    // Clipping
-    uint32_t copy_width  = (x_pos + image_width  > framebuffer_width)  ? (framebuffer_width  - x_pos) : image_width;
-    uint32_t copy_height = (y_pos + image_height > framebuffer_height) ? (framebuffer_height - y_pos) : image_height;
 
-    const uint8_t* image_buffer = buf;
-    uint8_t* frame_buffer = data->frame_buf_p;
+    // Clipping
+    uint32_t copy_width  = (x + img_width  > framebuffer_width)  ? (framebuffer_width  - x) : img_width;
+    uint32_t copy_height = (y + img_height > framebuffer_height) ? (framebuffer_height - y) : img_height;
+
+    //Line buffer used for optimized copying
+    size_t line_bytes = (size_t)copy_width * pixel_size;
+    uint8_t *line_buffer = k_malloc(line_bytes);
 
     // copy image line by line
     //  - read line and copy to local line buffer
     //  - copy line buffer optimized, 32-bit aligned into frame buffer
     for (uint32_t y_i = 0; y_i < copy_height; ++y_i) {
-        const uint8_t* src_row = image_buffer + y_i * image_width * img_px_size;
-        uint8_t line_buffer[copy_width * img_px_size];
+        const uint8_t* src_row = img_buf_p + y_i * img_width * pixel_size;
 
         // read image line
-        memcpy(line_buffer, src_row, copy_width * img_px_size);
+        memcpy(line_buffer, src_row, line_bytes);
 
         // write line to frame buffer
         // different algorithmns, depending of pixel size of frame buffer and image
-        uint8_t* dst_row = frame_buffer + ((y_i + y_pos) * framebuffer_width + x_pos) * fb_px_size;
+        uint8_t* dst_row = frame_buf_p + ((y_i + y) * framebuffer_width + x) * pixel_size;
 
-        if (fb_px_size == 3) {
-            copy_image_line_3bpp_optimized(dst_row, line_buffer, copy_width, img_px_size);
+        if (pixel_size == 3) {
+            copy_image_line_3bpp_optimized(dst_row, line_buffer, copy_width, pixel_size);
         }
-        else if (fb_px_size == 4) {
-           if (img_px_size == 4) {
-               // direct compatible → memcpy
-               memcpy(dst_row, line_buffer, copy_width * 4);
-           } else if (img_px_size == 3) {
-              copy_image_line_3bpp_to_4bpp_optimized(dst_row, line_buffer, copy_width);
-          }
+        else if (pixel_size == 4) {
+           // direct compatible → memcpy
+            memcpy(dst_row, line_buffer, copy_width * 4);
         }
     }
+    k_free(line_buffer);
+    LOG_DBG("DONE");
     return 0;
 }
 
@@ -195,29 +195,11 @@ int copy_image_line_3bpp_optimized(
     return 0;
 }
 
-int copy_image_line_3bpp_to_4bpp_optimized(
-    uint8_t* dst_row,
-    const uint8_t* line_buffer,
-    uint32_t copy_width)
-{
-    for (uint32_t x = 0; x < copy_width; ++x) {
-        const uint8_t* src_px = line_buffer + x * 3;
-        uint32_t* dst_px = (uint32_t*)(dst_row + x * 4);
-
-        // write 32 bit: RGB + (Alpha)
-        *dst_px = ((uint32_t)src_px[0])       |  // R
-                  ((uint32_t)src_px[1] << 8)  |  // G
-                  ((uint32_t)src_px[2] << 16);   // B
-                  // byte 3 is unchanged / unused
-    }
-    return 0;
-}
-
 void config_spi_m(const struct device *dev)
 {
     const struct ri_qspi_cfg *cfg = dev->config;
 
-    LOG_DBG("Writing SPI master configuration");
+    LOG_DBG("");
 
     // poll_spi_master_status_idle();
     MODIFYREG(RI_QSPI_DISPLAY_QSPI_MASTER_CFG_ITF_REG      ,  RI_QSPI_MASTER_REGFILE__CFG_ITF__SPI_MODE__FIELD       ,              RI_QSPI_MASTER_REGFILE__CFG_ITF__SPI_MODE_SNGL_SPI__E); // begin with single SPI
@@ -231,10 +213,13 @@ void config_spi_m(const struct device *dev)
     MODIFYREG(RI_QSPI_DISPLAY_QSPI_MASTER_CFG_SS_TIMING_REG,  RI_QSPI_MASTER_REGFILE__CFG_SS_TIMING__SETUP__FIELD    , (cfg->qspi_dev.css << RI_QSPI_MASTER_REGFILE__CFG_SS_TIMING__SETUP__SHIFT));
     MODIFYREG(RI_QSPI_DISPLAY_QSPI_MASTER_CFG_SS_TIMING_REG,  RI_QSPI_MASTER_REGFILE__CFG_SS_TIMING__HOLD__FIELD     , (cfg->qspi_dev.csh << RI_QSPI_MASTER_REGFILE__CFG_SS_TIMING__HOLD__SHIFT));
     MODIFYREG(RI_QSPI_DISPLAY_QSPI_MASTER_CFG_SS_TIMING_REG,  RI_QSPI_MASTER_REGFILE__CFG_SS_TIMING__INACTIVE__FIELD , (cfg->qspi_dev.csi << RI_QSPI_MASTER_REGFILE__CFG_SS_TIMING__INACTIVE__SHIFT));
+    
+    LOG_DBG("DONE");
 }
 
 int config_pixel_format (const struct device *dev)
 {
+    LOG_DBG("");
     const struct ri_qspi_cfg *cfg = dev->config;
     struct ri_qspi_data *data = dev->data;
 
@@ -246,7 +231,7 @@ int config_pixel_format (const struct device *dev)
         return 1;
     }
 
-    LOG_DBG("configure pixel format");
+    
     // source pixel format & display pixel format (sink)
     switch (data->pixel_size) {
       case PIXEL_SIZE08:
@@ -271,12 +256,13 @@ int config_pixel_format (const struct device *dev)
     }
     
     MODIFYREG(RI_QSPI_DISPLAY_DISP_CTRL_CFG_REG,  RI_QSPI_DISP_REGFILE__CFG__PX_CONVERT_SELECT__FIELD, (0x0 << RI_QSPI_DISP_REGFILE__CFG__PX_CONVERT_SELECT__SHIFT));
-
+    LOG_DBG("DONE");
     return 0;
 }
 
 void switch_qspi_mode(const struct device *dev)
 {
+    LOG_DBG("");
     struct ri_qspi_data *data = dev->data;
     ri_qspi_job_t* job_p = &data->spi_job;
     
@@ -290,12 +276,13 @@ void switch_qspi_mode(const struct device *dev)
 
     ri_wait_us(10); // FIXME (without the PRINT_D's around this line)
 
-    LOG_DBG("\nconfigure SPI master to QSPI mode");
     MODIFYREG(RI_QSPI_DISPLAY_QSPI_MASTER_CFG_ITF_REG, RI_QSPI_MASTER_REGFILE__CFG_ITF__SPI_MODE__FIELD, RI_QSPI_MASTER_REGFILE__CFG_ITF__SPI_MODE_QUAD_SPI__E);    // switch to quad SPI mode
+    LOG_DBG("DONE");
 }
 
 void switch_spi_mode(const struct device *dev)
 {
+    LOG_DBG("");
     struct ri_qspi_data *data = dev->data;
     ri_qspi_job_t* job_p = &data->spi_job;
     
@@ -307,8 +294,8 @@ void switch_spi_mode(const struct device *dev)
 
     exec_spi_job(dev);
 
-    LOG_DBG("\nconfigure SPI master to SPI mode");
     MODIFYREG(RI_QSPI_DISPLAY_QSPI_MASTER_CFG_ITF_REG, RI_QSPI_MASTER_REGFILE__CFG_ITF__SPI_MODE__FIELD, RI_QSPI_MASTER_REGFILE__CFG_ITF__SPI_MODE_SNGL_SPI__E);    // switch to normal SPI mode
+    LOG_DBG("DONE");
 }
 
 void poll_qspi_display_ctrl_status_idle () 
@@ -316,12 +303,9 @@ void poll_qspi_display_ctrl_status_idle ()
     uint32_t reg_val;
     while(1) {
         reg_val = READREG(RI_QSPI_DISPLAY_DISP_CTRL_STATUS_REG);
-        LOG_DBG("\nRead RI_QSPI_DISPLAY_DISP_CTRL_STATUS_REG = %X", reg_val);
         if (reg_val == RI_QSPI_DISP_REGFILE__STATUS__STATE_IDLE__E) {
-            LOG_DBG("\nQSPI display control is IDLE -> continue");
             break;
         } else {
-            LOG_DBG("\nQSPI display control is BUSY");
             ;
         }
     }
@@ -335,7 +319,7 @@ void config_RDMA (const struct device *dev)
     uint32_t  frame_size_memory    = cfg->x_res * cfg->y_res * data->pixel_size;
     uint32_t  buf_addr = (uint32_t)data->frame_buf_p;
 
-    LOG_DBG("\nconfigure RDMA");
+    LOG_DBG("configure RDMA");
     LOG_DBG("DMA address  :%X", buf_addr);
     LOG_DBG("DMA num bytes:%d", frame_size_memory);
     WRITEREG(RI_QSPI_DISPLAY_RDMA_RI_RDMA_REG_STARTADDR_REG, buf_addr);
@@ -346,13 +330,14 @@ void config_RDMA (const struct device *dev)
 
 void display_reset()
 {
+    LOG_DBG("");
     MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, (0x1 << 31), (0x1 << 31));
     LOG_DBG(" -    LED_YELLOW2_LED (fpga board) SHOULD BE ON");
     MODIFYREG(RBB_FPGA_TOP_OUT_1_REG, (0x1 << (RBB_REG__FPGA_TOP_OUT_1__OTHER_OUTS_0__SHIFT + 0)), (0x1 << (RBB_REG__FPGA_TOP_OUT_1__OTHER_OUTS_0__SHIFT + 0)));
     LOG_DBG(" -    MIPI V2 PCB relevant,QSPI_33_EN -> 1 (voltag level translator activated)");
     ri_wait_ms(100);
     // QSPI display reset:
-    LOG_DBG("reset QSPI display");
+    LOG_DBG("-     Asserting reset");
     MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, (0x1 << 18), (0x0 << 18));
     
     ri_wait_ms(200);    // reset pulse 100ms
@@ -362,7 +347,7 @@ void display_reset()
 
     ri_wait_ms(200);    // reset pulse 100ms
 
-    LOG_DBG("deassertsource_interna reset QSPI display");
+    LOG_DBG("-    Deasserting reset");
     MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, (0x1 << 18), (0x1 << 18));
     
     ri_wait_ms(200);     // data sheet:PowerOnSequence: T3(RESET high to first command) min 10ms
@@ -370,6 +355,7 @@ void display_reset()
     MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, (0x1 << 24), (0x1 << 24)); 
     LOG_DBG(" -    MIPI CLK200 switched ON, LED SHOULD BE OFF");
 
+    LOG_DBG("DONE");
 }
 
 void exec_display_command(const struct device *dev)
@@ -545,12 +531,12 @@ void display_init(const struct device *dev)
 
 void display_image_write(const struct device *dev)
 {
+    
+    LOG_DBG("");
+
     const struct ri_qspi_cfg *cfg = dev->config;
     struct ri_qspi_data *data = dev->data;
     ri_qspi_job_t* job_p = &data->spi_job;
-    
-    LOG_DBG("------------------------");
-    LOG_DBG("write image to display");
 
     uint32_t  frame_size_display   = cfg->x_res * cfg->y_res * data->pixel_size;
 
@@ -570,6 +556,8 @@ void display_image_write(const struct device *dev)
     WRITEREG(RI_QSPI_DISPLAY_RDMA_RI_RDMA_REG_CTRL_REG, 0x0);
 
     WRITEREG(RI_QSPI_DISPLAY_DISP_CTRL_QSPI_DISP_CTRL_REG, 0x1); // clear buffers
+
+    LOG_DBG("DONE");
 
 }
 
@@ -608,7 +596,6 @@ void exec_spi_job (const struct device *dev)
     }
 
     WRITEREG(RI_QSPI_DISPLAY_DISP_CTRL_SPI_CMD_CTRL_1_REG,  1); // start SPI transfer
-    LOG_DBG("exec SPI job");
 
     if (job_p->valid == false) { // Wait & Poll until valid
         poll_qspi_display_ctrl_status_idle();
@@ -641,7 +628,6 @@ static int ri_qspi_display_image_write( const struct device *dev,
                                         const struct display_buffer_descriptor *desc,
                                         const void *buf)
 {
-    // display_setup_partial_mode(image_p);
     struct ri_qspi_data *data = dev->data;
     int err = 0;
 
@@ -655,7 +641,6 @@ static int ri_qspi_display_image_write( const struct device *dev,
       //data->pixel_size = image_p->pixel_size;
       config_pixel_format(dev);
     } else {
-        LOG_DBG("Compiling frame into buffer");
         compile_qspi_display_frame(dev, x, y, desc, buf);
     }
 
@@ -697,11 +682,8 @@ static int ri_qspi_display_set_brightness( const struct device *dev,
     cmd_p->address = 0x51; // WRDISBV: Write Display Brightness
     uint8_t clipped_brightness = MIN(QSPI_DISP_MAX_BRIGHTNESS, brightness); // clip to maximum
 
-    LOG_DBG("brightness %d", clipped_brightness);
     cmd_p->wr_data_byte_0  = clipped_brightness;
     exec_display_command(dev);
-
-    LOG_INF("Brightness set to %u", brightness);
 
     return 0;
 }
