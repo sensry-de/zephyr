@@ -57,6 +57,4 @@ typedef enum {
     PIXEL_SIZE32 = 4    // one pixel has 4 byte
 } ri_pixel_size_e;
 
-void ri_qspi_display_fade_in                    (uint32_t max_brightness);
-
 #endif /*_RI_FW_QSPI_DISPLAY_H*/
