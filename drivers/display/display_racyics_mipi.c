@@ -14,6 +14,8 @@
 
 #include "display_racyics_mipi.h"
 
+LOG_MODULE_REGISTER(display_racyics_mipi, CONFIG_DISPLAY_LOG_LEVEL);
+
 /* Defines */
 
 #define DT_DRV_COMPAT racyics_mipi_display
