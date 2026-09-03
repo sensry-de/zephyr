@@ -11,6 +11,5 @@ config DISPLAY_RACYICS_QSPI
 config DISPLAY_RACYICS_QSPI_BUFFER
     bool "Allocate the display buffer into data_sram1 region"
     depends on DISPLAY_RACYICS_QSPI
-    default y
     help
         Allocate the display buffer into data_sram1 region
