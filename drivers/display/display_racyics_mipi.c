@@ -10,6 +10,7 @@
 #include <soc.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/display.h>
+#include <zephyr/drivers/mipi_dsi.h>
 
 #include "display_racyics_mipi.h"
 
