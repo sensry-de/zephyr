@@ -33,10 +33,6 @@ LOG_MODULE_REGISTER(display_racyics_qspi, CONFIG_DISPLAY_LOG_LEVEL);
 
 #define RI_QSPI_DISPLAY_PIXEL_SIZE(inst) ( DISPLAY_BITS_PER_PIXEL(DT_INST_PROP(inst, pixel_format)) / BITS_PER_BYTE )
 
-#define ri_wait_ms k_msleep
-#define ri_wait_us k_usleep
-
-
 /* Internal Variables*/
 
 struct ri_qspi_cfg {
@@ -274,7 +270,7 @@ void switch_qspi_mode(const struct device *dev)
 
     exec_spi_job(dev);
 
-    ri_wait_us(10); // FIXME (without the PRINT_D's around this line)
+    k_usleep(10); // FIXME (without the PRINT_D's around this line)
 
     MODIFYREG(RI_QSPI_DISPLAY_QSPI_MASTER_CFG_ITF_REG, RI_QSPI_MASTER_REGFILE__CFG_ITF__SPI_MODE__FIELD, RI_QSPI_MASTER_REGFILE__CFG_ITF__SPI_MODE_QUAD_SPI__E);    // switch to quad SPI mode
     LOG_DBG("DONE");
@@ -335,22 +331,22 @@ void display_reset()
     LOG_DBG(" -    LED_YELLOW2_LED (fpga board) SHOULD BE ON");
     MODIFYREG(RBB_FPGA_TOP_OUT_1_REG, (0x1 << (RBB_REG__FPGA_TOP_OUT_1__OTHER_OUTS_0__SHIFT + 0)), (0x1 << (RBB_REG__FPGA_TOP_OUT_1__OTHER_OUTS_0__SHIFT + 0)));
     LOG_DBG(" -    MIPI V2 PCB relevant,QSPI_33_EN -> 1 (voltag level translator activated)");
-    ri_wait_ms(100);
+    k_msleep(100);
     // QSPI display reset:
     LOG_DBG("-     Asserting reset");
     MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, (0x1 << 18), (0x0 << 18));
     
-    ri_wait_ms(200);    // reset pulse 100ms
+    k_msleep(200);    // reset pulse 100ms
     
     MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, (0x1 << 19), (0x1 << 19));
     LOG_DBG(" -    QSPI DISP VCI SHOULD BE ON");
 
-    ri_wait_ms(200);    // reset pulse 100ms
+    k_msleep(200);    // reset pulse 100ms
 
     LOG_DBG("-    Deasserting reset");
     MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, (0x1 << 18), (0x1 << 18));
     
-    ri_wait_ms(200);     // data sheet:PowerOnSequence: T3(RESET high to first command) min 10ms
+    k_msleep(200);     // data sheet:PowerOnSequence: T3(RESET high to first command) min 10ms
     
     MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, (0x1 << 24), (0x1 << 24)); 
     LOG_DBG(" -    MIPI CLK200 switched ON, LED SHOULD BE OFF");
@@ -442,7 +438,7 @@ void display_init(const struct device *dev)
     cmd_p->address         = 0x11; // SLPOUT: Sleep Out
     exec_display_command(dev);
 
-    ri_wait_ms(200); // min 120ms sleep out time, until next command is accepted
+    k_msleep(200); // min 120ms sleep out time, until next command is accepted
 
     cmd_p->address         = 0x29; // DISPON: Display On
     exec_display_command(dev);
