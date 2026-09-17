@@ -15,3 +15,8 @@
 		zephyr,shell-uart = &uart0;
 	};
 };
+
+&i2c_controller {
+	status = "okay";
+	sccb-mode;
+};

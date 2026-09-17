@@ -41,6 +41,15 @@
 			status = "okay";
 		};
 
+		i2c_controller: i2c@40046000 {
+			compatible = "racyics,edgevision-i2c";
+			reg = <0x40046000 0x24>;
+			interrupts = <3 3>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
 		dtimer1: dtimer@40050000 {
 			compatible = "arm,cmsdk-dtimer";
 			reg = <0x40050000 0x1000>;
