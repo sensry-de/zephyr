@@ -254,15 +254,15 @@ static int i2c_edgevision_configure(const struct device *dev, uint32_t dev_confi
 
 	switch (I2C_SPEED_GET(dev_config)) {
 	case I2C_SPEED_STANDARD:
-		/* 100MHz */
+		/* 100kHz */
 		bus_hz = RI_I2C_SPEED_STANDARD_HZ;
 		break;
 	case I2C_SPEED_FAST:
-		/* 400MHz */
+		/* 400kHz */
 		bus_hz = RI_I2C_SPEED_FAST_HZ;
 		break;
 	case I2C_SPEED_FAST_PLUS:
-		/* 1GHz */
+		/* 1MHz */
 		bus_hz = RI_I2C_SPEED_FAST_PLUS_HZ;
 		break;
 	default:
