@@ -28,3 +28,6 @@ include : [display-controller.yaml, lcd-controller.yaml]
 properties:
   reg:
     required: true
+  i2c-bus:
+    type: phandle
+    required: true
