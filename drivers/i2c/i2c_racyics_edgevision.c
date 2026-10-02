@@ -375,6 +375,8 @@ static int i2c_edgevision_init(const struct device *dev)
 	struct i2c_edgevision_data *data = dev->data;
 	int ret;
 
+    LOG_INF("Initializing I2C ");
+
 	ret = k_sem_init(&data->bus_sem, 1, 1);
 	if (ret) {
 		return ret;
@@ -386,6 +388,8 @@ static int i2c_edgevision_init(const struct device *dev)
 
 	i2c_hw_configure(cfg->clock_frequency);
 	cfg->irq_config_func(dev);
+
+    LOG_INF("Initialized @%dHz...", cfg->clock_frequency);
 	return 0;
 }
 
