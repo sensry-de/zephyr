@@ -16,6 +16,10 @@
 	};
 };
 
+&i2s0 {
+	status = "okay";
+};
+
 &i2c_controller {
 	status = "okay";
 	sccb-mode;

@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: Apache-2.0
+
+description: Racyics EdgeVision I2S controller
+
+compatible: "racyics,edgevision-i2s"
+
+include: [i2s-controller.yaml]
+
+properties:
+  reg:
+    required: true
+
+  interrupts:
+    required: true
+
+  clocks:
+    required: true
+
+  role:
+    type: string
+    required: true
+    enum:
+      - "controller"
+      - "target"
+    description: |
+      I2S role. "target" receives bit clock and word select from an external
+      controller; "controller" generates them.

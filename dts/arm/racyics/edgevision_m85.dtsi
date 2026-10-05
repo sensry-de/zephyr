@@ -50,6 +50,15 @@
 			status = "disabled";
 		};
 
+		i2s0: i2s@40033000 {
+			compatible = "racyics,edgevision-i2s";
+			reg = <0x40033000 0x1000>;
+			clocks = <&sysclk &sysclk>;
+			interrupts = <11 3>;
+			role = "target";
+			status = "disabled";
+		};
+
 		dtimer1: dtimer@40050000 {
 			compatible = "arm,cmsdk-dtimer";
 			reg = <0x40050000 0x1000>;
