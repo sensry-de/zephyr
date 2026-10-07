@@ -3,4 +3,4 @@ config I2S_RACYICS_EDGEVISION
 	default y
 	depends on DT_HAS_RACYICS_EDGEVISION_I2S_ENABLED
 	help
-      Enable I2S driver for Racyics Edgevision SoC.
+	  Enable I2S driver for Racyics Edgevision SoC.

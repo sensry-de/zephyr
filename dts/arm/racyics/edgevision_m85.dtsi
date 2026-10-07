@@ -24,7 +24,7 @@
 			device_type = "cpu";
 			compatible = "arm,cortex-m85";
 			reg = <0>;
-			clock-frequency = <DT_FREQ_M(25)>;
+			clock-frequency = <DT_FREQ_M(40)>;
 			#address-cells = <1>;
 			#size-cells = <1>;
 		};
