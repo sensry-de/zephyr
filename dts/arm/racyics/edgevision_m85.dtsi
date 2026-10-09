@@ -55,7 +55,7 @@
 			interrupts = <3 3>;
 			#address-cells = <1>;
 			#size-cells = <0>;
-			status = "disabled";
+			status = "okay";
 		};
 
 		i2s0: i2s@40033000 {
@@ -82,6 +82,16 @@
 			pixel-format = <PANEL_PIXEL_FORMAT_RGB_888>;
 			status = "disabled";
 		};
+
+		mipi_display: mipi-display@40020000{
+			compatible = "racyics,mipi-display";
+			reg = <0x40020000 0x1000>;
+			width = <800>;
+			height = <1280>;
+			pixel-format = <PANEL_PIXEL_FORMAT_RGB_888>;
+			i2c-bus = <&i2c_controller>;
+			status = "okay";
+      		};
 
 		itcm: memory@1000000 {
 			compatible = "mmio-sram";
