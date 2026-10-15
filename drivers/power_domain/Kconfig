@@ -148,6 +148,14 @@ config POWER_DOMAIN_ARM_SCMI_INIT_PRIORITY
 
 endif #POWER_DOMAIN_ARM_SCMI
 
+config POWER_DOMAIN_RI_EDGEVISION
+    bool "Racyics Edgevision Power Domain Driver" 
+    default y
+    depends on DT_HAS_RACYICS_EDGEVISION_POWER_DOMAIN_ENABLED
+    select DEVICE_DEPS
+    help
+        Enable Racyics Power Domain Driver
+
 # zephyr-keep-sorted-start
 rsource "Kconfig.nrfs_gdpwr"
 rsource "Kconfig.nrfs_swext"

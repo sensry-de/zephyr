@@ -8,6 +8,7 @@
 #include <arm/armv8.1-m.dtsi>
 #include <freq.h>
 #include <zephyr/dt-bindings/display/panel.h>
+#include <zephyr/dt-bindings/power/edgevision_power.h>
 
 / {
 	sysclk: system-clock {
@@ -32,6 +33,12 @@
 	};
 
 	soc {
+		pd_display: pd-display {
+			compatible = "racyics,edgevision-power-domain";
+			domain-id = <SOC_PWRDOMAIN_DISPLAY>;
+			#power-domain-cells = <0>;
+		};
+
 		uart0: uart@40048000 {
 			compatible = "arm,cmsdk-uart";
 			reg = <0x40048000 0x1000>;
