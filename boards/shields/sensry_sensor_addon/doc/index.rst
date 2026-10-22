@@ -45,25 +45,25 @@ Supported devices
      - Zephyr driver
      - Node label
    * - BMI270 accelerometer and gyroscope
-     - :dtcompatible:`bosch,bmi270`
+     - ``bosch,bmi270``
      - ``imu``
    * - LIS2MDL magnetometer
-     - :dtcompatible:`st,lis2mdl`
+     - ``st,lis2mdl``
      - ``magnetometer``
    * - BME680 temperature, pressure, humidity and gas resistance
-     - :dtcompatible:`bosch,bme680`
+     - ``bosch,bme680``
      - ``environmental_sensor``
    * - OPT3002 light sensor
-     - :dtcompatible:`ti,opt3001`
+     - ``ti,opt3001``
      - ``light_sensor``
    * - PDM microphone
-     - :dtcompatible:`nordic,nrf-pdm`
+     - ``nordic,nrf-pdm``
      - ``microphone``
    * - PCF85063A real-time clock
-     - :dtcompatible:`nxp,pcf85063a`
+     - ``nxp,pcf85063a``
      - ``external_rtc``
    * - PCA9554-compatible GPIO expander
-     - :dtcompatible:`nxp,pca9554`
+     - ``nxp,pca9554``
      - ``i2s_gpio_controller``
 
 Use the node label with ``DT_NODELABEL()`` to access a device:
