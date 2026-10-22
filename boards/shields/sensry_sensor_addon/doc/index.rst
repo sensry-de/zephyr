@@ -16,10 +16,23 @@ sensor integration.
 It combines a BMI270 IMU, LIS2MDL magnetometer, BME680 environmental sensor,
 light sensor, PDM microphone, real-time clock and GPIO expander.
 
-.. figure:: sensry_sensor_addon.webp
-   :alt: Sensry Kallisto Sensor Add-On shield
-   :width: 400px
+.. list-table::
+   :widths: 50 50
    :align: center
+
+   * - .. figure:: sensry_sensor_addon_top.webp
+          :alt: Sensry Kallisto Sensor Add-On top view
+          :width: 280px
+          :align: center
+
+          Top view
+
+     - .. figure:: sensry_sensor_addon_bottom.webp
+          :alt: Sensry Kallisto Sensor Add-On bottom view
+          :width: 280px
+          :align: center
+
+          Bottom view
 
 Supported devices
 *****************
@@ -141,19 +154,6 @@ Read the BME680 environmental sensor, light sensor and magnetometer:
    uart:~$ sensor get light_sensor light
    uart:~$ sensor get magnetometer magn_xyz
 
-Configure the BMI270 measurement ranges and sample rates before reading it:
-
-.. code-block:: console
-
-   uart:~$ sensor attr_set imu accel_xyz full_scale 2
-   uart:~$ sensor attr_set imu accel_xyz oversampling 1
-   uart:~$ sensor attr_set imu accel_xyz sampling_frequency 100
-   uart:~$ sensor attr_set imu gyro_xyz full_scale 500
-   uart:~$ sensor attr_set imu gyro_xyz oversampling 1
-   uart:~$ sensor attr_set imu gyro_xyz sampling_frequency 100
-   uart:~$ sensor get imu accel_xyz gyro_xyz
-
-Request channels explicitly to avoid querying channels a device does not support.
 The microphone, RTC and GPIO expander use separate APIs and are not accessed
 through the ``sensor`` commands.
 
