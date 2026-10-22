@@ -12,6 +12,7 @@
 #include <zephyr/drivers/display.h>
 #include <zephyr/drivers/mipi_dsi.h>
 #include <zephyr/drivers/i2c.h>
+#include <zephyr/pm/device.h>
 
 #include "display_racyics_mipi.h"
 
@@ -100,6 +101,27 @@ static void ri_mipi_display_get_capabilities(const struct device *dev,
     capabilities->supported_pixel_formats = PIXEL_FORMAT_RGB_888;
 }
 
+#ifdef CONFIG_PM_DEVICE
+static int ri_mipi_display_pm_action(const struct device *dev, enum pm_device_action action)
+{
+    int ret = 0; 
+
+    switch (action) {
+	case PM_DEVICE_ACTION_RESUME:
+		/* TODO*/
+		break;
+	case PM_DEVICE_ACTION_SUSPEND:
+		/* TODO*/
+		break;
+	default:
+		ret = -ENOTSUP;
+		break;
+	}
+
+	return ret;
+}
+#endif /* CONFIG_PM_DEVICE */
+
 /* Device Instatiation */
 static DEVICE_API(display, ri_mipi_display_api) = {
 	.write =  ri_mipi_display_image_write,
@@ -120,6 +142,8 @@ static DEVICE_API(display, ri_mipi_display_api) = {
         .pixel_size = RI_MIPI_DISPLAY_PIXEL_SIZE(inst),                 \
         .pixel_format = DT_INST_PROP(inst, pixel_format),               \
     };                                                                  \
+                                                                        \
+    PM_DEVICE_DT_INST_DEFINE(inst, ri_mipi_display_pm_action);          \
                                                                         \
     DEVICE_DT_INST_DEFINE(  inst, ri_mipi_display_init,                 \
                             PM_DEVICE_DT_INST_GET(inst),                \
