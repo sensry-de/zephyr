@@ -7,6 +7,8 @@
 #ifndef _RI_FW_MIPI_DISPLAY_H
 #define _RI_FW_MIPI_DISPLAY_H
 
+
+#define DCU_AXIBUSWORDS_BYTES 16
 typedef enum {
     RI_MIPI_DISP_TYPE_UNDEFINED,
     RI_MIPI_DISP_TYPE_GENERIC,
@@ -19,13 +21,6 @@ typedef struct {
     uint16_t sync_pulse;
     uint16_t back_porch;
 } ri_mipi_disp_side_parameters_t;
-
-typedef struct {
-    ri_mipi_disp_type_t type;
-    ri_mipi_disp_side_parameters_t vertical;
-    ri_mipi_disp_side_parameters_t horizontal;
-    uint8_t nr_of_lanes;
-} ri_mipi_disp_parameters_t;
 
 
 #define RI_MIPI_DISP_ACTIVE_WIDTH_TFT_F_AND_S   800
