@@ -1,0 +1,26 @@
+/*
+ * Copyright (c) 2026 sensry.io
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+
+#include <racyics/edgevision_m85.dtsi>
+
+/ {
+	chosen {
+		zephyr,sram = &itcm;
+		zephyr,console = &uart0;
+		zephyr,shell-uart = &uart0;
+	};
+};
+
+&i2s0 {
+	status = "disabled";
+};
+
+&i2c_controller {
+	status = "disabled";
+};
+
