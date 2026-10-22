@@ -9,7 +9,7 @@ Sensry Kallisto Sensor Add-On
 Overview
 ********
 
-The Sensry Kallisto Sensor Add-On is designed for nRF54 Series DKs, using
+The Sensry Kallisto Sensor Add-On is designed for Nordic Semiconductor nRF54 Series DKs, using
 the Nordic Expansion Board header and native Zephyr drivers for plug-and-play
 sensor integration.
 
