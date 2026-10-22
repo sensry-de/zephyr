@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 board:
-  name: fpga_dev_board
+  name: riev_fpga_dev_board
   full_name: Racyics edgeVision FPGA Development Board
   vendor: racyics
   socs:
