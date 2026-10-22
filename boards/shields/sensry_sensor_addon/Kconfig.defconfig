@@ -1,0 +1,39 @@
+# Copyright (c) 2026 Sensry GmbH
+# SPDX-License-Identifier: Apache-2.0
+
+if SHIELD_SENSRY_SENSOR_ADDON
+
+config GPIO_PCA_SERIES_INTERRUPT
+	default n
+
+if GPIO
+
+# Initialize chip-select GPIOs before the SPI and sensor drivers.
+config GPIO_INIT_PRIORITY
+	default 0
+
+endif # GPIO
+
+# Initialize sensors before the DMIC driver.
+if SENSOR
+
+config SENSOR_INIT_PRIORITY
+	default 70
+
+endif # SENSOR
+
+if AUDIO_DMIC
+
+config AUDIO_DMIC_INIT_PRIORITY
+	default 80
+
+endif # AUDIO_DMIC
+
+if BOARD_NRF54L15DK_NRF54L15_CPUAPP && SPI
+
+config SPI_COMPLETION_TIMEOUT_TOLERANCE
+	default 1000
+
+endif # BOARD_NRF54L15DK_NRF54L15_CPUAPP && SPI
+
+endif # SHIELD_SENSRY_SENSOR_ADDON
