@@ -40,4 +40,8 @@
 #define WRITEREG_DEV   WRITE32_DEV
 
 
+#define WRITEREG_LOG(reg_name, write_reg, reg_value)                                        \
+    WRITEREG(write_reg, reg_value);                                                         \
+    LOG_DBG("%s\t0x%08X\t->\t0x%08X", reg_name, write_reg, reg_value);                      \
+
 #endif // _RIHWACCESS_H
