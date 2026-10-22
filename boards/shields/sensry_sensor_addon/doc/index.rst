@@ -45,37 +45,34 @@ Supported devices
      - Zephyr driver
      - Node label
    * - BMI270 accelerometer and gyroscope
-     - Bosch BMI270
+     - :dtcompatible:`bosch,bmi270`
      - ``imu``
    * - LIS2MDL magnetometer
-     - ST LIS2MDL
+     - :dtcompatible:`st,lis2mdl`
      - ``magnetometer``
    * - BME680 temperature, pressure, humidity and gas resistance
-     - Bosch BME680
+     - :dtcompatible:`bosch,bme680`
      - ``environmental_sensor``
    * - OPT3002 light sensor
-     - TI OPT300x (``ti,opt3001``)
+     - :dtcompatible:`ti,opt3001`
      - ``light_sensor``
    * - PDM microphone
-     - Nordic nrfx PDM (DMIC API)
+     - :dtcompatible:`nordic,nrf-pdm`
      - ``microphone``
    * - PCF85063A real-time clock
-     - NXP PCF85063A (RTC API)
+     - :dtcompatible:`nxp,pcf85063a`
      - ``external_rtc``
    * - PCA9554-compatible GPIO expander
-     - NXP PCA series (GPIO API)
+     - :dtcompatible:`nxp,pca9554`
      - ``i2s_gpio_controller``
 
-Use the node label with ``DT_NODELABEL()`` to access a device in C:
+Use the node label with ``DT_NODELABEL()`` to access a device:
 
 .. code-block:: c
 
    const struct device *const bme680 =
        DEVICE_DT_GET(DT_NODELABEL(environmental_sensor));
 
-Enable the corresponding subsystem in the application configuration and check
-``device_is_ready()`` before using the device. The microphone uses the DMIC API;
-the other sensors use the sensor API.
 
 Setup
 *****
