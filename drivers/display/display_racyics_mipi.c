@@ -26,8 +26,6 @@ LOG_MODULE_REGISTER(display_racyics_mipi, CONFIG_DISPLAY_LOG_LEVEL);
 #define I2C_NODE DT_NODELABEL(i2c_controller)
 
 // TODELETE
-#define CFG_FPGA 
-#define CFG_SIL
 //#define DSI_MANUAL_MODE
 // TODELETE
 
@@ -47,13 +45,143 @@ struct ri_mipi_data {
     uint8_t                pixel_format;
 };
 
+
+// F&S TFT display-related stuff:
+static const uint8_t LEDDRIVER_DEV_ADDR = 0x61; // PCA9634PW
+typedef enum {
+    TFT_I2C_LEDDRIVER_OUT_IDX_BLON_e  =0,
+    TFT_I2C_LEDDRIVER_OUT_IDX_BLPWM_e =1,
+    TFT_I2C_LEDDRIVER_OUT_IDX_RESX_e  =3
+} tft_i2c_leddriver_out_idx_t;
+
+
 /* Helper Declarations */
 
 static int mipi_disp_config(const struct device *dev);
 static uint16_t blanking_total(const ri_mipi_disp_side_parameters_t* p_display_cfg);
 static uint32_t doubleToHex(double value);
 
+static int tft_i2c_leddriver_rw(const struct device *dev, uint8_t reg_addr, uint8_t read_or_write_flag, uint8_t *p_bytebuf);
+static int tft_i2c_leddriver_set_out(const struct device *dev, tft_i2c_leddriver_out_idx_t idx, bool val);
+static int tft_i2c_leddriver_init(const struct device *dev);
+static int tft_i2c_leddriver_enable(const struct device *dev);
+static int do_disp_RESX_wait(const struct device *dev, uint8_t val);
+
 /* Helper Functions */
+
+int tft_i2c_leddriver_rw(const struct device *dev, uint8_t reg_addr, uint8_t read_or_write_flag, uint8_t *p_bytebuf)
+{
+    const struct ri_mipi_cfg *cfg = dev->config;
+    int err;
+
+    if (reg_addr >= 32) {
+        LOG_ERR("Bad address %02X\n", reg_addr);
+        return -EINVAL;
+    }
+    if (p_bytebuf == NULL) {
+        LOG_ERR("Invalid buffer");
+        return -EINVAL;
+    }
+
+    if (read_or_write_flag == I2C_MSG_READ) {
+        err = i2c_reg_read_byte(cfg->i2c_bus, LEDDRIVER_DEV_ADDR, reg_addr, p_bytebuf);
+    } else {
+        err = i2c_reg_write_byte(cfg->i2c_bus, LEDDRIVER_DEV_ADDR, reg_addr, *p_bytebuf);
+    }
+
+    if (err != 0) {
+        LOG_ERR("Error %d; I2C %s Addr 0x%02X -> %02X\n",
+                err, (read_or_write_flag == I2C_MSG_READ) ? "rd" : "wr",
+                LEDDRIVER_DEV_ADDR, reg_addr);
+        return err;
+    }
+
+    LOG_DBG("I2C %s Addr 0x%02X %02X -> %02X\n",
+            (read_or_write_flag == I2C_MSG_READ) ? "rd" : "wr",
+            LEDDRIVER_DEV_ADDR, reg_addr, *p_bytebuf);
+
+    return 0;
+}
+int tft_i2c_leddriver_set_out(const struct device *dev, tft_i2c_leddriver_out_idx_t idx, bool val /* as on the wire! 0=low, 1=high*/)
+{
+  const uint8_t LEDOUTREGIDX      =idx/4;
+  const uint8_t LEDOUTREG_LSB_IDX=(idx%4)*2;
+  static bool first_call_LEDOUT[2];
+  static uint8_t leddriver_reg_LEDOUT[2]; // mirrored register value
+
+  uint8_t regval;
+  int err;
+  uint8_t mask;
+
+  if (idx>=8) {
+    LOG_ERR("Index out of range, only 8 are implemented");
+    return -EINVAL;
+  }
+  mask = (0x3 << LEDOUTREG_LSB_IDX);
+  regval  = leddriver_reg_LEDOUT[LEDOUTREGIDX] & (~mask);
+  regval |=((val ? 1 /*fully on*/: 0/*fully off*/) << LEDOUTREG_LSB_IDX);
+  err=tft_i2c_leddriver_rw(dev, 0x0C+LEDOUTREGIDX /*LEDOUT0/1*/, I2C_MSG_WRITE , &regval);
+  if(err!=0) {
+    LOG_ERR("ERROR in tft_i2c_leddriver_rw, err=%d, trying to update leddriver_reg_LEDOUT%d=0x%08X to %08X\n", err, LEDOUTREGIDX, leddriver_reg_LEDOUT[LEDOUTREGIDX], regval);
+  }
+  // read back:
+  if (!first_call_LEDOUT[LEDOUTREGIDX]) {
+    err=tft_i2c_leddriver_rw(dev, 0x0C+LEDOUTREGIDX /*LEDOUT0/1*/, I2C_MSG_READ , &leddriver_reg_LEDOUT[LEDOUTREGIDX]);
+    if(err!=0) {
+      LOG_ERR("ERROR in tft_i2c_leddriver_rw, err=%d, trying to read back leddriver_reg_LEDOUT%d=0x%08X\n", err, LEDOUTREGIDX, regval);
+      leddriver_reg_LEDOUT[LEDOUTREGIDX] = regval;
+      return err;
+    }
+    if(leddriver_reg_LEDOUT[LEDOUTREGIDX]!=regval) {
+      LOG_ERR("Mismatch during read back leddriver_reg_LEDOUT%d: expected 0x%08X, got 0x%08X\n", LEDOUTREGIDX, regval, leddriver_reg_LEDOUT[LEDOUTREGIDX]);
+      return -EINVAL;
+    }
+  }
+  first_call_LEDOUT[LEDOUTREGIDX] = 0;
+  return err;
+}
+int tft_i2c_leddriver_init(const struct device *dev)
+{
+  int err;
+  uint8_t data;
+
+  data = (1<<4); // MODE1: low power mode (all off)
+  err = tft_i2c_leddriver_rw(dev, 0x00 /*MODE1 register*/, I2C_MSG_WRITE , &data);
+
+  data = 0b010101; // MODE2: output logic invert (which seems to be the expected, LEDs usually tied to high and other end pulled low?!)
+                  //          -> written values are now as on the wire! 0=low, 1=high, !!! it looks like in the F&S, this is different: "1" is pulling the active low reset to low
+                   //  + standard values
+  err = tft_i2c_leddriver_rw(dev, 0x01 /*MODE2 register*/, I2C_MSG_WRITE , &data);
+
+  if (err != 0) return err;
+  for (int i=0;i<8;++i) {
+    err = tft_i2c_leddriver_set_out(dev, (tft_i2c_leddriver_out_idx_t)i, 1 );
+    if (err != 0) return err;
+  }
+  LOG_DBG("Success, outputs initialized to 1, not enabled\n");
+  return 0;
+}
+int tft_i2c_leddriver_enable(const struct device *dev)
+{
+  int err;
+  uint8_t data;
+  data = 0; // MODE1: on
+  err = tft_i2c_leddriver_rw(dev, 0x00 /*MODE1 register*/,I2C_MSG_WRITE,&data);
+  if (err != 0) return err;
+  LOG_DBG("Success");
+  return 0;
+}
+int do_disp_RESX_wait(const struct device *dev, uint8_t val)
+{
+    int err;
+    LOG_DBG("DISP LEDDRV: RESX=%d\n",val);
+    err = tft_i2c_leddriver_set_out(dev, TFT_I2C_LEDDRIVER_OUT_IDX_RESX_e, val );
+    if ( 0 != err ) return err;
+    LOG_DBG("Wait 200ms\n");
+    k_msleep(200);
+    return 0;
+}
+
 
 uint32_t doubleToHex(double value) {
 
@@ -64,8 +192,6 @@ uint32_t doubleToHex(double value) {
     LOG_DBG("\t\t\t ->hex value: 0x%08X\n", (high_bytes << 16) | (low_bytes & 0xFFFF));
     return (high_bytes << 16) | (low_bytes & 0xFFFF);
 }
-
-
 uint16_t blanking_total(const ri_mipi_disp_side_parameters_t* p_display_cfg)
 {
   LOG_DBG("\tFront Porch: %d", p_display_cfg->front_porch);
@@ -73,8 +199,6 @@ uint16_t blanking_total(const ri_mipi_disp_side_parameters_t* p_display_cfg)
   LOG_DBG("\tBack Porch: %d",p_display_cfg->back_porch);
   return (p_display_cfg->front_porch + p_display_cfg->sync_pulse + p_display_cfg->back_porch);
 }
-
-
 int mipi_disp_config(const struct device *dev)
 {
     const struct ri_mipi_cfg *cfg = dev->config;
@@ -126,7 +250,7 @@ int mipi_disp_config(const struct device *dev)
     min_pixel_clk_mhz /= 1000000;
 
     
-    #ifndef CFG_FPGA
+    #ifndef CONFIG_BOARD_RIEV_FPGA_DEV_BOARD
     float sel_pixel_clk_mhz = round((min_pixel_clk_mhz * 1.00164) * 10000) / 10000 ;
     #else
     float sel_pixel_clk_mhz =  72.2222; // Xilinx DPHY IP config
@@ -137,12 +261,12 @@ int mipi_disp_config(const struct device *dev)
       return -EINVAL;
     }
 
-    float dsi_byte_clk = sel_pixel_clk_mhz * 3 / cfg->nr_of_lanes;
-    float dphy_lane_speed = dsi_byte_clk * 8;
-    float dphy_lane_speed_burst = dphy_lane_speed * 1.1; // 10 % Margin for burst mode
-    float selected_bitclk = floor(dphy_lane_speed_burst);
-    float selected_byteclk = selected_bitclk / 8;
-    float sel_refresh_rate_hz = (sel_pixel_clk_mhz*1000.0*1000.0/((float)(total_pixel_per_line * total_lines_per_frame)));
+    double dsi_byte_clk = sel_pixel_clk_mhz * 3 / cfg->nr_of_lanes;
+    double dphy_lane_speed = dsi_byte_clk * 8;
+    double dphy_lane_speed_burst = dphy_lane_speed * 1.1; // 10 % Margin for burst mode
+    double selected_bitclk = floor(dphy_lane_speed_burst);
+    double selected_byteclk = selected_bitclk / 8;
+    double sel_refresh_rate_hz = (sel_pixel_clk_mhz*1000.0*1000.0/((double)(total_pixel_per_line * total_lines_per_frame)));
     LOG_DBG("------------------ Display Clock config -------------------------\n");
     LOG_DBG("Minimum calculated min_pixel_clk_mhz: %.4f", min_pixel_clk_mhz);
     LOG_DBG("Selected sel_pixel_clk_mhz: %.4f", sel_pixel_clk_mhz);
@@ -170,7 +294,7 @@ int mipi_disp_config(const struct device *dev)
 
     WRITEREG_LOG("DSI_DISP_PHY_MODE_CFG         ", DSI_DISP_PHY_MODE_CFG,      0x00000030);
 
-    #ifndef CFG_FPGA
+    #ifndef CONFIG_BOARD_RIEV_FPGA_DEV_BOARD
     WRITEREG_LOG("DSI_DISP_PHY_CLK_CFG          ", DSI_DISP_PHY_CLK_CFG, 0x00000701);
     #else 
     WRITEREG_LOG("DSI_DISP_PHY_CLK_CFG          ", DSI_DISP_PHY_CLK_CFG, 0x00000301);
@@ -179,7 +303,8 @@ int mipi_disp_config(const struct device *dev)
     WRITEREG_LOG("DSI_DISP_DSI_GENERAL_CFG      ", DSI_DISP_DSI_GENERAL_CFG,   0x00000001);
 
     WRITEREG_LOG("DSI_DISP_DSI_VID_TX_CFG       ", DSI_DISP_DSI_VID_TX_CFG,    0x00100002); // LPDT_DISPLAY_CMD_EN (commands only in LP mode) , VID_MODE_TYPE=Burst mode
-    #ifndef CFG_SIL
+    #if !defined(CONFIG_BOARD_RIEV_FPGA_DEV_BOARD) && \
+        !defined(CONFIG_BOARD_RIEV_DEV_BOARD)
     WRITEREG_LOG("DSI_DISP_DSI_DS_TX_CFG        ", DSI_DISP_DSI_DS_TX_CFG,     0x00000001);                  //DS_HS_LINK_EN = 1 see Email from Synopsis
     #endif
     WRITEREG_LOG("DSI_DISP_IPI_COLOR_MAN_CFG    ", DSI_DISP_IPI_COLOR_MAN_CFG, 0x00000050); // 8 bits
@@ -212,7 +337,7 @@ int mipi_disp_config(const struct device *dev)
       WRITEREG_LOG("DSI_DISP_IPI_VID_VACT_MAN_CFG ", DSI_DISP_IPI_VID_VACT_MAN_CFG,  0x00000500);
       WRITEREG_LOG("DSI_DISP_IPI_VID_VFP_MAN_CFG  ", DSI_DISP_IPI_VID_VFP_MAN_CFG,   0x00000003);
       WRITEREG_LOG("DSI_DISP_PWR_UP               ", DSI_DISP_PWR_UP,                0x00000001);
-      #ifdef CFG_FPGA
+      #ifdef CONFIG_BOARD_RIEV_FPGA_DEV_BOARD
         WRITEREG_LOG("DSI_DISP_MODE_CTRL            ", DSI_DISP_MODE_CTRL,             0x00000003); // Video mode
       #endif
     #else
@@ -260,7 +385,7 @@ int mipi_disp_config(const struct device *dev)
 
 static int ri_mipi_display_init(const struct device *dev)
 {
-    int err = 0;
+    int err;
 
     const struct ri_mipi_cfg *cfg = dev->config;
 
@@ -275,9 +400,60 @@ static int ri_mipi_display_init(const struct device *dev)
     err = mipi_disp_config(dev);
     if ( 0 != err ) return err;
 
+    #if defined(CONFIG_BOARD_RIEV_FPGA_DEV_BOARD) || \
+        defined(CONFIG_BOARD_RIEV_DEV_BOARD)
+        
+        err = tft_i2c_leddriver_init(dev);
+        if ( 0 != err ) {
+            LOG_ERR("tft_i2c_leddriver_init failed with code %d\n", err);
+            return err;
+        }
+        err = tft_i2c_leddriver_enable(dev);
+        if ( 0 != err ) {
+            LOG_ERR("tft_i2c_leddriver_enable failed with code %d\n", err);
+            return err;
+        }
+
+        MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, (0x1 << 25), (0x0 << 25));
+        LOG_DBG(" -    DSI_RST_FPGA_O 'I2C reset' oe_n -> 0 \n"); // is this the output enable of the PCA9634 on the F&S PCB ADP-MIPI2MIPI2 which is part of the system
+
+        err = do_disp_RESX_wait(dev, 0); // reset activated
+        if (err != 0) {
+            LOG_ERR("do_disp_RESX_wait failed with code %d\n", err);
+            return err;
+        }
+        err = do_disp_RESX_wait(dev, 1); // reset deactivated
+        if (err != 0) {
+            LOG_ERR("do_disp_RESX_wait failed with code %d\n", err);
+            return err;
+        }
+
+        LOG_DBG("Display reset done\n");
+
+        LOG_DBG("DISP LEDDRV brightest setting: BLON=1 ");
+        err = tft_i2c_leddriver_set_out(dev, TFT_I2C_LEDDRIVER_OUT_IDX_BLON_e,1);
+        if (err != 0) {
+            LOG_ERR("tft_i2c_leddriver_set_out failed with code %d\n", err);
+            return err;
+        }
+
+        LOG_DBG("BLPWM=0\n");
+        err = tft_i2c_leddriver_set_out(dev, TFT_I2C_LEDDRIVER_OUT_IDX_BLPWM_e,0);
+        if (err != 0) {
+            LOG_ERR("tft_i2c_leddriver_set_out failed with code %d\n", err);
+            return err;
+        }
+    #endif
+    {
+        int32_t dsi_disp_core_id = READREG(DSI_DISP_CORE_ID);
+        if (dsi_disp_core_id == 0x0) {
+                LOG_ERR("DSI_HOST_VERSION_ID READ FAILED: 0x%08X 0x%08X\n", DSI_DISP_CORE_ID, dsi_disp_core_id);
+                return -ENOTSUP;
+        }
+    }    
     LOG_INF("DONE");
 
-    return err;
+    return 0;
 }
 
 static int ri_mipi_display_image_write( const struct device *dev,
