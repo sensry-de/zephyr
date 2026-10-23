@@ -37,6 +37,7 @@
 			compatible = "racyics,edgevision-power-domain";
 			domain-id = <SOC_PWRDOMAIN_DISPLAY>;
 			#power-domain-cells = <0>;
+			status = "disabled";
 		};
 
 		uart0: uart@40048000 {
@@ -70,7 +71,7 @@
 			compatible = "arm,cmsdk-dtimer";
 			reg = <0x40050000 0x1000>;
 			interrupts = <4 3>;
-			status = "okay";
+			status = "disabled";
 		};
 
 		qspi_display: qspi-display@40069000 {
@@ -79,7 +80,7 @@
 			width = <466>;
 			height = <466>;
 			pixel-format = <PANEL_PIXEL_FORMAT_RGB_888>;
-			status = "okay";
+			status = "disabled";
 		};
 
 		itcm: memory@1000000 {
