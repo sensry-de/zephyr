@@ -724,7 +724,7 @@ static DEVICE_API(display, ri_qspi_display_api) = {
     };                                                                  \
                                                                         \
     DEVICE_DT_INST_DEFINE(  inst, ri_qspi_display_init,                 \
-                            PM_DEVICE_DT_INST_GET(inst),                \
+                            DEVICE_DT_INST_GET(inst),                   \
                             &ri_qspi_data_##inst, &ri_qspi_cfg_##inst,  \
                             POST_KERNEL, CONFIG_DISPLAY_INIT_PRIORITY,  \
                             &ri_qspi_display_api );                     \
