@@ -91,6 +91,7 @@
 			pixel-format = <PANEL_PIXEL_FORMAT_RGB_888>;
 			i2c-bus = <&i2c_controller>;
 			status = "disabled";
+			power-domains = <&pd_display>;
       		};
 
 		itcm: memory@1000000 {
