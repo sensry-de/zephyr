@@ -4,5 +4,8 @@
 config DISPLAY_RACYICS_MIPI
     bool "Racyics MIPI display driver"
     depends on DT_HAS_RACYICS_MIPI_DISPLAY_ENABLED
+    select POWER_DOMAIN
+    select PM_DEVICE
+    select PM_DEVICE_RUNTIME
     help
         Enable Racyics MIPI display driver
