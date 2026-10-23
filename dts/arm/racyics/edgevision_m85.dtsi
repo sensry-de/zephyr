@@ -55,7 +55,7 @@
 			interrupts = <3 3>;
 			#address-cells = <1>;
 			#size-cells = <0>;
-			status = "okay";
+			status = "disabled";
 		};
 
 		i2s0: i2s@40033000 {
@@ -90,7 +90,7 @@
 			height = <1280>;
 			pixel-format = <PANEL_PIXEL_FORMAT_RGB_888>;
 			i2c-bus = <&i2c_controller>;
-			status = "okay";
+			status = "disabled";
       		};
 
 		itcm: memory@1000000 {
