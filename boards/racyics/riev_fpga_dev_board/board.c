@@ -19,9 +19,13 @@ LOG_MODULE_REGISTER(riev_fpga_dev_board, CONFIG_LOG_DEFAULT_LEVEL);
 /* FPGA_TOP_OUT_0 bits */
 #define FPGA_OUT0_CAM2_PWUP_BIT     (1U << 22)
 #define FPGA_OUT0_CAM1_CLK_EN_BIT   (1U << 23)
+#define FPGA_OUT_MIPI_REFCLK_ON_BIT (1U << 24)
+#define FPGA_OUT_MIPI_DSI_RST_BIT   (1U << 25)
+#define FPGA_OUT_MIPI_DSI_EN_BIT    (1U << 27)
 #define FPGA_OUT0_ENABLE_CODEC_BIT  ((1U << 14) | (1U << 13))
 #define FPGA_OUT0_BOOT_N_GYRO_BIT   ((1U << 12) | (1U << 11))
 #define FPGA_OUT0_RSTN_N_GYRO_BIT   (1U << 10)
+
 
 typedef enum {
 	FPGA_I2C_MUX_SEL_NONE = 0,
@@ -77,6 +81,20 @@ static int fpga_dev_board_init(void)
 	MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, FPGA_OUT0_RSTN_N_GYRO_BIT, FPGA_OUT0_RSTN_N_GYRO_BIT);
 
 	MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, FPGA_OUT0_ENABLE_CODEC_BIT, FPGA_OUT0_ENABLE_CODEC_BIT);
+#endif
+
+        /* 3. MIPI display init if enabled in DT */
+#if DT_NODE_HAS_STATUS_OKAY(DT_NODELABEL(mipi_display))
+    LOG_INF("Init FPGA MIPI display...");
+    MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, FPGA_OUT_MIPI_DSI_RST_BIT, FPGA_OUT_MIPI_DSI_RST_BIT);
+    LOG_DBG(" -    DSI_RST_FPGA_O 'I2C reset' oe_n -> 1");
+    MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, FPGA_OUT_MIPI_DSI_EN_BIT, FPGA_OUT_MIPI_DSI_EN_BIT);
+    LOG_DBG(" -    DSI_33_EN -> 1");
+    k_msleep(100);
+    MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, FPGA_OUT_MIPI_REFCLK_ON_BIT, FPGA_OUT_MIPI_REFCLK_ON_BIT);
+    LOG_DBG(" -    MIPI REFCLK LVDS200 Clock SHOULD BE ON (ctrl pin set 1)");
+    k_msleep(200);
+    fpga_i2c_mux_set(FPGA_I2C_MUX_SEL_1_DSI);
 #endif
 
 	return 0;
