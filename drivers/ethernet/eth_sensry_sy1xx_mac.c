@@ -13,6 +13,7 @@ LOG_MODULE_REGISTER(sy1xx_mac, CONFIG_ETHERNET_LOG_LEVEL);
 #include <zephyr/kernel.h>
 #include <zephyr/net/ethernet.h>
 #include <zephyr/sys/barrier.h>
+#include <zephyr/sys/byteorder.h>
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/net/phy.h>
 #include <udma.h>
@@ -62,6 +63,9 @@ struct sy1xx_mac_dev_config {
 	uint32_t base_addr;
 	/* optional - enable promiscuous mode */
 	bool promiscuous_mode;
+#if defined(CONFIG_PTP_CLOCK)
+	const struct device *ptp_clock;
+#endif
 
 	struct net_eth_mac_config mcfg;
 
@@ -110,6 +114,16 @@ static int sy1xx_mac_set_config(const struct device *dev,
 				enum ethernet_config_type type,
 				const struct ethernet_config *config);
 static void sy1xx_mac_rx_thread_entry(void *p1, void *p2, void *p3);
+
+#if defined(CONFIG_PTP_CLOCK)
+static const struct device *sy1xx_mac_get_ptp_clock(const struct device *dev,
+							   struct net_if *iface __unused)
+{
+	const struct sy1xx_mac_dev_config *cfg = dev->config;
+
+	return cfg->ptp_clock;
+}
+#endif
 
 static int sy1xx_mac_initialize(const struct device *dev)
 {
@@ -394,7 +408,8 @@ static int sy1xx_mac_low_level_send(const struct device *dev, uint8_t *tx, uint1
 	return 0;
 }
 
-static int sy1xx_mac_low_level_receive(const struct device *dev, uint8_t *rx, uint16_t *len)
+static int sy1xx_mac_low_level_receive(const struct device *dev, uint8_t *rx, uint16_t *len,
+				      struct net_ptp_time *timestamp, bool *timestamp_valid)
 {
 	struct sy1xx_mac_dev_config *cfg = (struct sy1xx_mac_dev_config *)dev->config;
 	struct sy1xx_mac_dev_data *const data = dev->data;
@@ -402,6 +417,7 @@ static int sy1xx_mac_low_level_receive(const struct device *dev, uint8_t *rx, ui
 	uint32_t bytes_transferred;
 
 	*len = 0;
+	*timestamp_valid = false;
 
 	/* rx udma still busy */
 	if (0 == sy1xx_mac_udma_is_finished_rx(cfg->base_addr)) {
@@ -418,13 +434,20 @@ static int sy1xx_mac_low_level_receive(const struct device *dev, uint8_t *rx, ui
 		   NET_ETH_MINIMAL_FRAME_SIZE) {
 		LOG_ERR("rx frame too short (%u bytes)", bytes_transferred);
 		ret = -EINVAL;
+	} else if (data->dma_buffers->rx[bytes_transferred - 1U] != 0U) {
+		LOG_DBG("rx frame status indicates an error: 0x%02x",
+			data->dma_buffers->rx[bytes_transferred - 1U]);
+		ret = -EBADMSG;
 	} else {
 		/*
-		 * The MAC appends its internal RTC timestamp and RX status to every
-		 * received frame. Do not pass this MAC-specific metadata to the
-		 * Ethernet stack.
+		 * RX metadata is a little-endian 64-bit PTP timestamp followed by
+		 * a status byte. The timestamp contains nanoseconds in the low word
+		 * and seconds in the high word.
 		 */
 		*len = bytes_transferred - SY1XX_MAC_RX_METADATA_SIZE;
+		timestamp->nanosecond = sys_get_le32(&data->dma_buffers->rx[*len]);
+		timestamp->second = sys_get_le32(&data->dma_buffers->rx[*len + sizeof(uint32_t)]);
+		*timestamp_valid = timestamp->nanosecond < NSEC_PER_SEC;
 		memcpy(rx, data->dma_buffers->rx, *len);
 		ret = 0;
 	}
@@ -475,7 +498,8 @@ static int sy1xx_mac_send(const struct device *dev, struct net_pkt *pkt)
 	return ret;
 }
 
-static int sy1xx_mac_receive_data(const struct device *dev, uint8_t *rx, uint16_t len)
+static int sy1xx_mac_receive_data(const struct device *dev, uint8_t *rx, uint16_t len,
+				  const struct net_ptp_time *timestamp, bool timestamp_valid)
 {
 	struct sy1xx_mac_dev_data *const data = dev->data;
 	struct net_pkt *rx_pkt;
@@ -494,6 +518,13 @@ static int sy1xx_mac_receive_data(const struct device *dev, uint8_t *rx, uint16_
 		return -EINVAL;
 	}
 
+	if (timestamp_valid) {
+		struct net_ptp_time rx_timestamp = *timestamp;
+
+		net_pkt_set_timestamp(rx_pkt, &rx_timestamp);
+		net_pkt_set_rx_timestamping(rx_pkt, true);
+	}
+
 	/* register new packet in stack */
 	ret = net_recv_data(data->iface, rx_pkt);
 	if (ret) {
@@ -508,14 +539,18 @@ static void sy1xx_mac_rx_thread_entry(void *p1, void *p2, void *p3)
 {
 	const struct device *dev = p1;
 	struct sy1xx_mac_dev_data *const data = dev->data;
+	struct net_ptp_time timestamp;
+	bool timestamp_valid;
 	int ret;
 
 	while (true) {
-		ret = sy1xx_mac_low_level_receive(dev, data->temp.rx, &data->temp.rx_len);
+		ret = sy1xx_mac_low_level_receive(dev, data->temp.rx, &data->temp.rx_len,
+						  &timestamp, &timestamp_valid);
 		if (ret == 0) {
 			/* register a new received frame */
 			if (data->temp.rx_len) {
-				sy1xx_mac_receive_data(dev, data->temp.rx, data->temp.rx_len);
+				sy1xx_mac_receive_data(dev, data->temp.rx, data->temp.rx_len,
+						       &timestamp, timestamp_valid);
 			}
 		} else {
 			/*
@@ -535,6 +570,7 @@ const struct ethernet_api sy1xx_mac_driver_api = {
 	.iface_api.init = sy1xx_mac_iface_init,
 	.get_capabilities = sy1xx_mac_get_caps,
 	.set_config = sy1xx_mac_set_config,
+	IF_ENABLED(CONFIG_PTP_CLOCK, (.get_ptp_clock = sy1xx_mac_get_ptp_clock,))
 	.send = sy1xx_mac_send,
 	.get_phy = sy1xx_mac_get_phy,
 };
@@ -548,6 +584,8 @@ const struct ethernet_api sy1xx_mac_driver_api = {
 		.base_addr = DT_INST_REG_ADDR_BY_NAME(n, data),                                    \
 		.pcfg = PINCTRL_DT_INST_DEV_CONFIG_GET(n),                                         \
 		.promiscuous_mode = DT_INST_PROP_OR(n, promiscuous_mode, false),                   \
+		IF_ENABLED(CONFIG_PTP_CLOCK,                                                      \
+			   (.ptp_clock = DEVICE_DT_GET(DT_INST_PHANDLE(n, ptp_clock)),))              \
 		.mcfg = NET_ETH_MAC_DT_INST_CONFIG_INIT(n),                                        \
 		.phy_dev = DEVICE_DT_GET(DT_INST_PHANDLE(n, phy_handle))};                         \
                                                                                                    \
