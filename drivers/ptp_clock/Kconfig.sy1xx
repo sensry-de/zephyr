@@ -1,0 +1,13 @@
+# Copyright (c) 2026 sensry.io
+# SPDX-License-Identifier: Apache-2.0
+
+config PTP_CLOCK_SY1XX
+	bool "Sensry SY1XX PTP clock driver"
+	default y
+	depends on DT_HAS_SENSRY_SY1XX_PTP_CLOCK_ENABLED
+	select NET_L2_PTP_TIMESTAMPING
+	help
+	  Enable the Sensry SY1XX PTP clock driver scaffold.
+
+	  The register access functions need to be implemented for the target
+	  SY1XX PTP peripheral.
