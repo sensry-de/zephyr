@@ -9,6 +9,8 @@
 LOG_MODULE_REGISTER(net_ptp_sample, LOG_LEVEL_DBG);
 
 #include <zephyr/kernel.h>
+#include <zephyr/drivers/ptp_clock.h>
+#include <zephyr/net/ethernet.h>
 
 #include <errno.h>
 #include <stdlib.h>
@@ -18,7 +20,35 @@ LOG_MODULE_REGISTER(net_ptp_sample, LOG_LEVEL_DBG);
 
 static int run_duration = CONFIG_NET_SAMPLE_RUN_DURATION;
 static struct k_work_delayable stop_sample;
+static struct k_work_delayable ptp_time_work;
 static struct k_sem quit_lock;
+
+static void print_ptp_time(struct k_work *work)
+{
+	sys_slist_t *ports_list = ptp_clock_ports_list();
+
+	ARG_UNUSED(work);
+
+	if (ports_list != NULL && sys_slist_len(ports_list) > 0U) {
+		struct ptp_port *port =
+			CONTAINER_OF(sys_slist_peek_head(ports_list), struct ptp_port, node);
+		const struct device *ptp_clock = net_eth_get_ptp_clock(port->iface);
+
+		if (ptp_clock != NULL) {
+			struct net_ptp_time time;
+			int ret = ptp_clock_get(ptp_clock, &time);
+
+			if (ret == 0) {
+				LOG_INF("PTP HW time: %llu.%09u",
+					(unsigned long long)time.second, time.nanosecond);
+			} else {
+				LOG_ERR("Failed to read PTP HW time: %d", ret);
+			}
+		}
+	}
+
+	k_work_reschedule(&ptp_time_work, K_SECONDS(1));
+}
 
 static void stop_handler(struct k_work *work)
 {
@@ -101,6 +131,9 @@ void init_testing(void)
 
 int main(void)
 {
+	k_work_init_delayable(&ptp_time_work, print_ptp_time);
+	k_work_schedule(&ptp_time_work, K_NO_WAIT);
+
 	init_testing();
 	return 0;
 }
