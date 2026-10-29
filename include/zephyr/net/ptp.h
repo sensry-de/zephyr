@@ -30,7 +30,7 @@ extern "C" {
 #endif
 
 #define PTP_MAJOR_VERSION 2 /**< Major PTP Version */
-#define PTP_MINOR_VERSION 1 /**< Minor PTP Version */
+#define PTP_MINOR_VERSION 0 /**< Minor PTP Version */
 
 #define PTP_VERSION (PTP_MINOR_VERSION << 4 | PTP_MAJOR_VERSION) /**< PTP version IEEE-1588:2019 */
 
