@@ -12,6 +12,9 @@ LOG_MODULE_REGISTER(sy1xx_mac, CONFIG_ETHERNET_LOG_LEVEL);
 #include <sys/types.h>
 #include <zephyr/kernel.h>
 #include <zephyr/net/ethernet.h>
+#if defined(CONFIG_PTP_CLOCK)
+#include <zephyr/drivers/ptp_clock.h>
+#endif
 #include <zephyr/sys/barrier.h>
 #include <zephyr/sys/byteorder.h>
 #include <zephyr/drivers/pinctrl.h>
@@ -460,10 +463,15 @@ static int sy1xx_mac_low_level_receive(const struct device *dev, uint8_t *rx, ui
 
 static int sy1xx_mac_send(const struct device *dev, struct net_pkt *pkt)
 {
+	struct sy1xx_mac_dev_config *cfg = (struct sy1xx_mac_dev_config *)dev->config;
 	struct sy1xx_mac_dev_data *const data = dev->data;
 	int ret;
 	uint32_t retries_left;
 	struct net_buf *frag;
+#if defined(CONFIG_PTP_CLOCK)
+	struct net_ptp_time tx_timestamp;
+	bool tx_timestamp_valid = false;
+#endif
 
 	/* push all fragments of the packet into one linear buffer */
 	frag = pkt->buffer;
@@ -483,8 +491,24 @@ static int sy1xx_mac_send(const struct device *dev, struct net_pkt *pkt)
 	/* hand over linear tx frame to udma */
 	retries_left = MAX_TX_RETRIES;
 	while (retries_left) {
+#if defined(CONFIG_PTP_CLOCK)
+		if (net_pkt_is_tx_timestamping(pkt) && device_is_ready(cfg->ptp_clock) &&
+		    ptp_clock_get(cfg->ptp_clock, &tx_timestamp) == 0) {
+			tx_timestamp_valid = true;
+		} else {
+			tx_timestamp_valid = false;
+		}
+#endif
 		ret = sy1xx_mac_low_level_send(dev, data->temp.tx, data->temp.tx_len);
 		if (ret == 0) {
+#if defined(CONFIG_PTP_CLOCK)
+			if (tx_timestamp_valid) {
+				net_pkt_set_timestamp(pkt, &tx_timestamp);
+#if defined(CONFIG_NET_PKT_TIMESTAMP_THREAD)
+				net_if_add_tx_timestamp(pkt);
+#endif
+			}
+#endif
 			break;
 		}
 		if (ret != -EBUSY) {
