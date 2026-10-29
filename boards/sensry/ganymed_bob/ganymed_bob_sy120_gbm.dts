@@ -57,6 +57,8 @@
 
 &eth0 {
 	status = "okay";
-	zephyr,random-mac-address;
+	/*zephyr,random-mac-address;*/
+	/*promiscuous-mode;*/
+	local-mac-address = [a8 9a cc dd ee ff];
 	phy-handle = <&pyh0>;
 };
