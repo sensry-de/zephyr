@@ -27,8 +27,9 @@
 #define SY1XX_RTC_NS_MASK	GENMASK(29, 0)
 #define SY1XX_RTC_SEC_HI_MASK	GENMASK(15, 0)
 #define SY1XX_RTC_TIMER_INCR_MASK	UINT32_MAX
+#define SY1XX_RTC_NOMINAL_INCREMENT_NS	8U
 #define SY1XX_RTC_SNAPSHOT_TIMEOUT_US	1000U
-#define SY1XX_PTP_SEC_MAX	GENMASK(47, 0)
+#define SY1XX_PTP_SEC_MAX	GENMASK64(47, 0)
 
 LOG_MODULE_REGISTER(sy1xx_ptp_clock);
 
@@ -263,7 +264,9 @@ static int sy1xx_ptp_clock_init(const struct device *dev)
 	struct sy1xx_ptp_clock_data *data = dev->data;
 
 	k_mutex_init(&data->mutex);
-	data->nominal_timer_increment = sys_read32(cfg->base_addr + SY1XX_RTC_TIMER_INCR);
+	/* Ganymed supplies a 125 MHz TSN timer clock: 8 ns per timer tick. */
+	data->nominal_timer_increment = SY1XX_RTC_NOMINAL_INCREMENT_NS << 24U;
+	sys_write32(data->nominal_timer_increment, cfg->base_addr + SY1XX_RTC_TIMER_INCR);
 
 	return 0;
 }
