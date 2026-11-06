@@ -1,0 +1,8 @@
+# Copyright (c) 2026 Racyics GmbH.
+# SPDX-License-Identifier: Apache-2.0
+
+description: Racyics MIPI DSI host
+
+compatible: "racyics,mipi-dsi"
+
+include: [mipi-dsi-host.yaml]
