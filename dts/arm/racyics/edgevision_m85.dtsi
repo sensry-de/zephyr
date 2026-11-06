@@ -83,16 +83,25 @@
 			status = "disabled";
 		};
 
-		mipi_display: mipi-display@40020000{
-			compatible = "racyics,mipi-display";
+		mipi_dsi: mipi-dsi@40020000 {
 			reg = <0x40020000 0x1000>;
-			width = <800>;
-			height = <1280>;
-			pixel-format = <PANEL_PIXEL_FORMAT_RGB_888>;
-			i2c-bus = <&i2c_controller>;
+			compatible = "racyics,mipi-dsi";
+			#address-cells = <1>;
+			#size-cells = <0>;
 			status = "disabled";
-			power-domains = <&pd_display>;
-      		};
+
+			panel@0 {
+				compatible = "racyics,mipi-display";
+				reg = <0>;
+				width = <800>;
+				height = <1280>;
+				data-lanes = <4>;
+				pixel-format = <PANEL_PIXEL_FORMAT_RGB_888>;
+				i2c-bus = <&i2c_controller>;
+				status = "disabled";
+				power-domains = <&pd_display>;
+			};
+		};
 
 		itcm: memory@1000000 {
 			compatible = "mmio-sram";

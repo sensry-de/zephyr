@@ -1,33 +1,42 @@
 # Copyright (c) 2026 Racyics GmbH.
 # SPDX-License-Identifier: Apache-2.0
 
+description: |
+  Racyics MIPI DSI display (F&S T070QYH-13CP panel) driven by the EdgeVision display controller
+  unit and the DSI2 host.
 
-title: |
-  Racyics MIPI display driver
+  The node is a child of the DSI host, the reg property is the DSI virtual channel:
 
-description: | 
-  Summary -> TODO
-
-  Here is an example to define a display device:
-
-  \ {
-        mipi-display@123456{
-          compatible = "racyics,mipi-display";
-          reg = <0x123456 0x123456>
-          width = <123456>;
-          height = <123456>;
-          pixel-format = <PANEL_PIXEL_FORMAT_RGB_888>;
-          status = "okay";
-      };
-  };
+    &mipi_dsi {
+            panel: panel@0 {
+                    compatible = "racyics,mipi-display";
+                    reg = <0>;
+                    width = <800>;
+                    height = <1280>;
+                    data-lanes = <4>;
+                    pixel-format = <PANEL_PIXEL_FORMAT_RGB_888>;
+                    i2c-bus = <&i2c_controller>;
+            };
+    };
 
 compatible: "racyics,mipi-display"
 
-include : [display-controller.yaml, lcd-controller.yaml]
+include: [display-controller.yaml, lcd-controller.yaml]
+
+on-bus: mipi-dsi
 
 properties:
   reg:
     required: true
+
+  data-lanes:
+    type: array
+    required: true
+    description: |
+      Number of DSI data lanes used by the panel. The array holds a single entry.
+
   i2c-bus:
     type: phandle
     required: true
+    description: |
+      I2C controller connected to the LED driver which controls the panel reset and backlight.
