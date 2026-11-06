@@ -4,26 +4,18 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef _RI_FW_MIPI_DISPLAY_H
-#define _RI_FW_MIPI_DISPLAY_H
+#ifndef ZEPHYR_DRIVERS_DISPLAY_DISPLAY_RACYICS_MIPI_H_
+#define ZEPHYR_DRIVERS_DISPLAY_DISPLAY_RACYICS_MIPI_H_
 
+/* Width in bytes of the AXI bus of the display controller unit */
+#define DCU_AXIBUSWORDS_BYTES	16U
 
-#define DCU_AXIBUSWORDS_BYTES 16
-typedef enum {
-    RI_MIPI_DISP_TYPE_UNDEFINED,
-    RI_MIPI_DISP_TYPE_GENERIC,
-    RI_MIPI_DISP_TYPE_TFT_F_AND_S
-} ri_mipi_disp_type_t;
+/* Blanking timings of the F&S T070QYH-13CP (NT35521) panel */
+#define RI_MIPI_DISP_H_FRONT_PORCH	56U
+#define RI_MIPI_DISP_H_SYNC_PULSE	128U
+#define RI_MIPI_DISP_H_BACK_PORCH	72U
+#define RI_MIPI_DISP_V_FRONT_PORCH	3U
+#define RI_MIPI_DISP_V_SYNC_PULSE	10U
+#define RI_MIPI_DISP_V_BACK_PORCH	38U
 
-typedef struct {
-    uint16_t active_lines;
-    uint16_t front_porch;
-    uint16_t sync_pulse;
-    uint16_t back_porch;
-} ri_mipi_disp_side_parameters_t;
-
-
-#define RI_MIPI_DISP_ACTIVE_WIDTH_TFT_F_AND_S   800
-#define RI_MIPI_DISP_ACTIVE_HEIGTH_TFT_F_AND_S  1280
-
-#endif /*_RI_FW_MIPI_DISPLAY_H*/
+#endif /* ZEPHYR_DRIVERS_DISPLAY_DISPLAY_RACYICS_MIPI_H_ */
