@@ -84,7 +84,7 @@ static int fpga_dev_board_init(void)
 #endif
 
         /* 3. MIPI display init if enabled in DT */
-#if DT_NODE_HAS_STATUS_OKAY(DT_NODELABEL(mipi_display))
+#if DT_NODE_HAS_STATUS_OKAY(DT_NODELABEL(mipi_dsi))
     LOG_INF("Init FPGA MIPI display...");
     MODIFYREG(RBB_FPGA_TOP_OUT_0_REG, FPGA_OUT_MIPI_DSI_RST_BIT, FPGA_OUT_MIPI_DSI_RST_BIT);
     LOG_DBG(" -    DSI_RST_FPGA_O 'I2C reset' oe_n -> 1");
