@@ -13,6 +13,8 @@
 #include <zephyr/sys/sys_io.h>
 #include <zephyr/sys/util.h>
 
+#include "ptp_clock_sy1xx.h"
+
 /* RTC register offsets, relative to the TSN_CTRL RTC base at offset 0x0800. */
 #define SY1XX_RTC_SR		0x004U
 #define SY1XX_RTC_CURTIME_NS	0x010U
@@ -83,6 +85,34 @@ static int sy1xx_ptp_clock_read_offset(const struct sy1xx_ptp_clock_config *cfg,
 	tm->second = ((uint64_t)seconds_hi << 32U) | seconds_lo;
 
 	return 0;
+}
+
+int sy1xx_ptp_clock_apply_offset(const struct device *dev, struct net_ptp_time *timestamp)
+{
+	const struct sy1xx_ptp_clock_config *cfg = dev->config;
+	struct sy1xx_ptp_clock_data *data = dev->data;
+	struct net_ptp_time offset;
+	int ret = 0;
+
+	if (timestamp->nanosecond >= NSEC_PER_SEC) {
+		return -EINVAL;
+	}
+
+	k_mutex_lock(&data->mutex, K_FOREVER);
+	(void)sy1xx_ptp_clock_read_offset(cfg, &offset);
+	k_mutex_unlock(&data->mutex);
+
+	timestamp->second += offset.second;
+	timestamp->nanosecond += offset.nanosecond;
+	if (timestamp->nanosecond >= NSEC_PER_SEC) {
+		timestamp->nanosecond -= NSEC_PER_SEC;
+		timestamp->second++;
+	}
+	if (timestamp->second > SY1XX_PTP_SEC_MAX) {
+		ret = -ERANGE;
+	}
+
+	return ret;
 }
 
 static int sy1xx_ptp_clock_write_offset(const struct sy1xx_ptp_clock_config *cfg,

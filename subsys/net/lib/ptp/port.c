@@ -469,10 +469,6 @@ static void port_delay_req_timestamp_cb(struct net_pkt *pkt)
 		req->timestamp.host._sec.low = pkt->timestamp._sec.low;
 		req->timestamp.host.nanosecond = pkt->timestamp.nanosecond;
 
-		LOG_DBG("Port %d registered timestamp for %d Delay_Req",
-			port->port_ds.id.port_number,
-			net_ntohs(msg->header.sequence_id));
-
 		if (iter == sys_slist_peek_tail(&port->delay_req_list)) {
 			net_if_unregister_timestamp_cb(&port->delay_req_ts_cb);
 		}
@@ -782,7 +778,6 @@ static int port_delay_req_msg_transmit(struct ptp_port *port)
 		return -EFAULT;
 	}
 
-	LOG_DBG("Port %d sends Delay_Req message", port->port_ds.id.port_number);
 	return 0;
 }
 

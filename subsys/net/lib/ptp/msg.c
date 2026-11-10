@@ -485,7 +485,11 @@ int ptp_msg_post_recv(struct ptp_port *port, struct ptp_msg *msg, int cnt)
 	/* Record local uptime for aging calculations */
 	msg->local_uptime_ms = k_uptime_get();
 
-	LOG_DBG("Port %d received %s message", port->port_ds.id.port_number, msg_type_str(msg));
+	if (type != PTP_MSG_SYNC && type != PTP_MSG_FOLLOW_UP && type != PTP_MSG_ANNOUNCE &&
+	    type != PTP_MSG_DELAY_RESP) {
+		LOG_DBG("Port %d received %s message", port->port_ds.id.port_number,
+			msg_type_str(msg));
+	}
 
 	switch (type) {
 	case PTP_MSG_SYNC:

@@ -6,6 +6,7 @@
 
 #define DT_DRV_COMPAT sensry_sy1xx_mac
 
+#include <inttypes.h>
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(sy1xx_mac, CONFIG_ETHERNET_LOG_LEVEL);
 
@@ -21,6 +22,9 @@ LOG_MODULE_REGISTER(sy1xx_mac, CONFIG_ETHERNET_LOG_LEVEL);
 #include <zephyr/net/phy.h>
 #include <udma.h>
 #include "eth.h"
+#if defined(CONFIG_PTP_CLOCK_SY1XX)
+#include "../ptp_clock/ptp_clock_sy1xx.h"
+#endif
 
 /* MAC register offsets */
 #define SY1XX_MAC_VERSION_REG      0x0000
@@ -411,6 +415,28 @@ static int sy1xx_mac_low_level_send(const struct device *dev, uint8_t *tx, uint1
 	return 0;
 }
 
+static const char *sy1xx_mac_rx_status_description(uint8_t status)
+{
+	switch (status) {
+	case 0x03U:
+		return "ERR_CRC: Invalid frame CRC";
+	case 0x05U:
+		return "ERR_LENGTH: Frame length mismatch or oversized frame";
+	case 0x07U:
+		return "ERR_DST_ADR: Destination MAC address mismatch";
+	case 0x09U:
+		return "ERR_GMII_ER: GMII receiver reported an error";
+	case 0x0bU:
+		return "ERR_GMII_DV: Invalid or too-short frame";
+	case 0x0dU:
+		return "ERR_AVST_READY: RX buffer unavailable";
+	case 0x0fU:
+		return "ERR_PADDING: Excessive padding bytes";
+	default:
+		return "Unknown status";
+	}
+}
+
 static int sy1xx_mac_low_level_receive(const struct device *dev, uint8_t *rx, uint16_t *len,
 				      struct net_ptp_time *timestamp, bool *timestamp_valid)
 {
@@ -429,6 +455,18 @@ static int sy1xx_mac_low_level_receive(const struct device *dev, uint8_t *rx, ui
 
 	/* rx udma is ready */
 	bytes_transferred = SY1XX_UDMA_READ_REG(cfg->base_addr, SY1XX_UDMA_CFG_REG) & 0x0000ffff;
+	if (bytes_transferred >= SY1XX_MAC_RX_METADATA_SIZE &&
+	    bytes_transferred <= MAX_MAC_PACKET_LEN) {
+		uint32_t metadata_offset = bytes_transferred - SY1XX_MAC_RX_METADATA_SIZE;
+
+		uint8_t status = data->dma_buffers->rx[bytes_transferred - 1U];
+
+		LOG_DBG("RX timestamp: %u.%09u, status: 0x%02x%s%s",
+			sys_get_le32(&data->dma_buffers->rx[metadata_offset + sizeof(uint32_t)]),
+			sys_get_le32(&data->dma_buffers->rx[metadata_offset]),
+			status, status != 0U ? " " : "",
+			status != 0U ? sy1xx_mac_rx_status_description(status) : "");
+	}
 	if (bytes_transferred == 0) {
 		/* no data, should never happen */
 		SY1XX_UDMA_CANCEL_RX(cfg->base_addr);
@@ -436,11 +474,14 @@ static int sy1xx_mac_low_level_receive(const struct device *dev, uint8_t *rx, ui
 	} else if (bytes_transferred < SY1XX_MAC_RX_METADATA_SIZE +
 		   NET_ETH_MINIMAL_FRAME_SIZE) {
 		LOG_ERR("rx frame too short (%u bytes)", bytes_transferred);
+		LOG_HEXDUMP_ERR(data->dma_buffers->rx, bytes_transferred, "RX data");
 		ret = -EINVAL;
+/*
 	} else if (data->dma_buffers->rx[bytes_transferred - 1U] != 0U) {
-		LOG_DBG("rx frame status indicates an error: 0x%02x",
+		LOG_ERR("rx frame status indicates an error: 0x%02x",
 			data->dma_buffers->rx[bytes_transferred - 1U]);
 		ret = -EBADMSG;
+*/
 	} else {
 		/*
 		 * RX metadata is a little-endian 64-bit PTP timestamp followed by
@@ -451,6 +492,16 @@ static int sy1xx_mac_low_level_receive(const struct device *dev, uint8_t *rx, ui
 		timestamp->nanosecond = sys_get_le32(&data->dma_buffers->rx[*len]);
 		timestamp->second = sys_get_le32(&data->dma_buffers->rx[*len + sizeof(uint32_t)]);
 		*timestamp_valid = timestamp->nanosecond < NSEC_PER_SEC;
+#if defined(CONFIG_PTP_CLOCK_SY1XX)
+		if (*timestamp_valid) {
+			*timestamp_valid = device_is_ready(cfg->ptp_clock) &&
+				(sy1xx_ptp_clock_apply_offset(cfg->ptp_clock, timestamp) == 0);
+			if (*timestamp_valid) {
+				LOG_DBG("RX timestamp with offset: %" PRIu64 ".%09u",
+					timestamp->second, timestamp->nanosecond);
+			}
+		}
+#endif
 		memcpy(rx, data->dma_buffers->rx, *len);
 		ret = 0;
 	}
@@ -470,7 +521,6 @@ static int sy1xx_mac_send(const struct device *dev, struct net_pkt *pkt)
 	struct net_buf *frag;
 #if defined(CONFIG_PTP_CLOCK)
 	struct net_ptp_time tx_timestamp;
-	bool tx_timestamp_valid = false;
 #endif
 
 	/* push all fragments of the packet into one linear buffer */
@@ -491,18 +541,11 @@ static int sy1xx_mac_send(const struct device *dev, struct net_pkt *pkt)
 	/* hand over linear tx frame to udma */
 	retries_left = MAX_TX_RETRIES;
 	while (retries_left) {
-#if defined(CONFIG_PTP_CLOCK)
-		if (net_pkt_is_tx_timestamping(pkt) && device_is_ready(cfg->ptp_clock) &&
-		    ptp_clock_get(cfg->ptp_clock, &tx_timestamp) == 0) {
-			tx_timestamp_valid = true;
-		} else {
-			tx_timestamp_valid = false;
-		}
-#endif
 		ret = sy1xx_mac_low_level_send(dev, data->temp.tx, data->temp.tx_len);
 		if (ret == 0) {
 #if defined(CONFIG_PTP_CLOCK)
-			if (tx_timestamp_valid) {
+			if (net_pkt_is_tx_timestamping(pkt) && device_is_ready(cfg->ptp_clock) &&
+			    ptp_clock_get(cfg->ptp_clock, &tx_timestamp) == 0) {
 				net_pkt_set_timestamp(pkt, &tx_timestamp);
 #if defined(CONFIG_NET_PKT_TIMESTAMP_THREAD)
 				net_if_add_tx_timestamp(pkt);

@@ -47,7 +47,7 @@ static void print_ptp_time(struct k_work *work)
 		}
 	}
 
-	k_work_reschedule(&ptp_time_work, K_SECONDS(1));
+	k_work_reschedule(&ptp_time_work, K_SECONDS(10));
 }
 
 static void stop_handler(struct k_work *work)
