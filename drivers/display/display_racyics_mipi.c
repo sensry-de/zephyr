@@ -21,16 +21,16 @@
 #include <zephyr/pm/device.h>
 
 #include "display_racyics_mipi.h"
-#include "display_racyics_mipi_nt35521.h"
 
 LOG_MODULE_REGISTER(display_racyics_mipi, CONFIG_DISPLAY_LOG_LEVEL);
 
 #define RI_MIPI_BYTES_PER_PIXEL	3U
-#define RI_MIPI_FB_WIDTH	CONFIG_DISPLAY_RACYICS_MIPI_FB_WIDTH
-#define RI_MIPI_FB_HEIGHT	CONFIG_DISPLAY_RACYICS_MIPI_FB_HEIGHT
+#define RI_MIPI_FB_WIDTH	DT_INST_PROP(0, width)
+#define RI_MIPI_FB_HEIGHT	DT_INST_PROP(0, height)
+#define RI_MIPI_FB_SIZE		(RI_MIPI_FB_WIDTH * RI_MIPI_FB_HEIGHT * RI_MIPI_BYTES_PER_PIXEL)
 
 #define RI_MIPI_FB_SECTION                                                                         \
-	Z_GENERIC_SECTION(LINKER_DT_NODE_REGION_NAME(DT_NODELABEL(data_sram1)))
+	Z_GENERIC_SECTION(LINKER_DT_NODE_REGION_NAME(DT_NODELABEL(data_ddram1)))
 
 /* DCU layer pixel format register value for RGB888 */
 #define DCU_LAYER_PIXFMT_RGB888		6U
@@ -460,9 +460,8 @@ static int ri_mipi_display_init(const struct device *dev)
 		return -ENODEV;
 	}
 
-	memset(cfg->fb, 0, (size_t)RI_MIPI_FB_WIDTH * RI_MIPI_FB_HEIGHT * RI_MIPI_BYTES_PER_PIXEL);
-	err = fb_flush(cfg->fb, (size_t)RI_MIPI_FB_WIDTH * RI_MIPI_FB_HEIGHT *
-				RI_MIPI_BYTES_PER_PIXEL);
+	memset(cfg->fb, 0, RI_MIPI_FB_SIZE);
+	err = fb_flush(cfg->fb, RI_MIPI_FB_SIZE);
 	if (err != 0) {
 		return err;
 	}
@@ -537,19 +536,15 @@ static DEVICE_API(display, ri_mipi_display_api) = {
 };
 
 #define RI_MIPI_DISP_DEFINE(inst)                                                                  \
-	BUILD_ASSERT((CONFIG_DISPLAY_RACYICS_MIPI_FB_WIDTH % 16) == 0,                             \
-		     "Framebuffer width must be a multiple of 16");                                \
-	BUILD_ASSERT(CONFIG_DISPLAY_RACYICS_MIPI_FB_WIDTH <= DT_INST_PROP(inst, width),            \
-		     "Framebuffer wider than the panel");                                          \
-	BUILD_ASSERT(CONFIG_DISPLAY_RACYICS_MIPI_FB_HEIGHT <= DT_INST_PROP(inst, height),          \
-		     "Framebuffer higher than the panel");                                         \
-	BUILD_ASSERT(CONFIG_DISPLAY_RACYICS_MIPI_FB_WIDTH * CONFIG_DISPLAY_RACYICS_MIPI_FB_HEIGHT  \
-		     * RI_MIPI_BYTES_PER_PIXEL <= DT_REG_SIZE(DT_NODELABEL(data_sram1)),           \
-		     "Framebuffer does not fit into DATA_SRAM1");                                  \
+	BUILD_ASSERT((DT_INST_PROP(inst, width) % 16) == 0,                                        \
+		     "Panel width must be a multiple of 16");                                      \
+	BUILD_ASSERT(DT_INST_PROP(inst, width) == RI_MIPI_FB_WIDTH &&                              \
+		     DT_INST_PROP(inst, height) == RI_MIPI_FB_HEIGHT,                              \
+		     "All panel instances must have the same size");                               \
+	BUILD_ASSERT(RI_MIPI_FB_SIZE <= DT_REG_SIZE(DT_NODELABEL(data_ddram1)),                    \
+		     "Framebuffer does not fit into DATA_DDRAM1");                                 \
                                                                                                    \
-	static uint8_t ri_mipi_fb_##inst[CONFIG_DISPLAY_RACYICS_MIPI_FB_WIDTH *                    \
-					 CONFIG_DISPLAY_RACYICS_MIPI_FB_HEIGHT *                   \
-					 RI_MIPI_BYTES_PER_PIXEL]                                  \
+	static uint8_t ri_mipi_fb_##inst[RI_MIPI_FB_SIZE]                                          \
 		__aligned(CONFIG_DCACHE_LINE_SIZE) RI_MIPI_FB_SECTION;                             \
                                                                                                    \
 	static const struct ri_mipi_cfg ri_mipi_cfg_##inst = {                                     \

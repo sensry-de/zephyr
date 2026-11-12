@@ -11,23 +11,3 @@ config DISPLAY_RACYICS_MIPI
 	select CACHE_MANAGEMENT if CPU_HAS_DCACHE
 	help
 	  Enable Racyics MIPI display driver
-
-if DISPLAY_RACYICS_MIPI
-
-config DISPLAY_RACYICS_MIPI_FB_WIDTH
-	int "Framebuffer width in pixels"
-	default 480
-	range 16 800
-	help
-	  Width of the framebuffer layer. The layer is centered on the panel. The width must be a
-	  multiple of 16 pixels so that every line is aligned to the AXI bus width of the display
-	  controller. The framebuffer is placed in DATA_SRAM1, which is 1 MiB in size.
-
-config DISPLAY_RACYICS_MIPI_FB_HEIGHT
-	int "Framebuffer height in pixels"
-	default 480
-	range 1 1280
-	help
-	  Height of the framebuffer layer. The layer is centered on the panel.
-
-endif # DISPLAY_RACYICS_MIPI
