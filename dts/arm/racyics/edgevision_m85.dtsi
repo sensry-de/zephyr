@@ -131,7 +131,18 @@
 			zephyr,memory-region = "DATA_SRAM4";
 			status = "okay";
 		};
-
+		data_ddram1: memory@30000000 {
+			compatible = "zephyr,memory-region", "mmio-sram";
+			reg = <0x30000000 DT_SIZE_M(256)>;
+			zephyr,memory-region = "DATA_DDRAM1";
+			status = "okay";
+		};
+		data_ddram2: memory@60000000 {
+			compatible = "zephyr,memory-region", "mmio-sram";
+			reg = <0x60000000 DT_SIZE_G(1)>;
+			zephyr,memory-region = "DATA_DDRAM2";
+			status = "okay";
+		};
 	};
 };
 
