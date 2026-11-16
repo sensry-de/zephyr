@@ -1,0 +1,17 @@
+# Copyright (c) 2026 sensry.io
+# SPDX-License-Identifier: Apache-2.0
+
+identifier: riev_dev_board/edgevision/m85
+vendor: racyics
+name: Racyics edgeVision Development Board
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+supported:
+  - display
+  - gpio
+  - uart
+  - spi
+  - i2c
+
