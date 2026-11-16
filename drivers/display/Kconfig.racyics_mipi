@@ -1,0 +1,13 @@
+# Copyright (c) 2026 Racyics GmbH.
+# SPDX-License-Identifier: Apache-2.0
+
+config DISPLAY_RACYICS_MIPI
+	bool "Racyics MIPI display driver"
+	depends on DT_HAS_RACYICS_MIPI_DISPLAY_ENABLED
+	depends on MIPI_DSI
+	select POWER_DOMAIN
+	select PM_DEVICE
+	select PM_DEVICE_RUNTIME
+	select CACHE_MANAGEMENT if CPU_HAS_DCACHE
+	help
+	  Enable Racyics MIPI display driver
