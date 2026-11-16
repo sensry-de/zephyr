@@ -1,0 +1,28 @@
+/*
+ * Copyright (c) 2026 Racyics GmbH.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	chosen {
+		zephyr,display = &panel;
+	};
+};
+
+&pd_display {
+	status = "okay";
+};
+
+&i2c_controller {
+	status = "okay";
+};
+
+&mipi_dsi {
+	status = "okay";
+
+	/* The driver refers to the panel by this node label */
+	panel: panel@0 {
+		status = "okay";
+	};
+};
