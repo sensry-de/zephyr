@@ -8,5 +8,7 @@ board:
   socs:
     - name: edgevision
       variants:
-        - name: m85
-          cpucluster: m85
+      - name: m85
+        cpucluster: m85
+      - name: m4
+        cpucluster: m4

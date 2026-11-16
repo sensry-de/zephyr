@@ -3,9 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#ifndef ZEPHYR_SOC_RACYICS_EDGEVISION_EV1X_COMMON_SOC_H_
-#define ZEPHYR_SOC_RACYICS_EDGEVISION_EV1X_COMMON_SOC_H_
+#ifndef ZEPHYR_SOC_RAYCICS_EDGEVISION_EV1X_COMMON_SOC_H_
+#define ZEPHYR_SOC_RAYCICS_EDGEVISION_EV1X_COMMON_SOC_H_
 
 #include <cmsis_core_m_defaults.h>
+#include <edgevision_top_memmap_regs_macroacc.h>
 
-#endif /* ZEPHYR_SOC_RACYICS_EDGEVISION_EV1X_COMMON_SOC_H_ */
+#include "ri_hwaccess.h"
+
+#endif /* ZEPHYR_SOC_RAYCICS_EDGEVISION_EV1X_COMMON_SOC_H_ */
