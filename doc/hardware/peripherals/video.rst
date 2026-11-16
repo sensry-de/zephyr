@@ -45,6 +45,7 @@ to handle and create controls.
 .. toctree::
    :maxdepth: 1
 
+   video_htpa
    video_mcux
    video_stm32
 
