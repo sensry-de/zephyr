@@ -43,7 +43,9 @@ LOG_MODULE_REGISTER(LOG_MODULE_NAME);
 #include <zephyr/net/phy.h>
 #include <zephyr/net/net_pkt.h>
 #include <zephyr/net/net_if.h>
+#include <zephyr/net/net_ip.h>
 #include <zephyr/net/ethernet.h>
+#include <zephyr/net/ptp.h>
 #include <ethernet/eth_stats.h>
 #include <zephyr/drivers/i2c.h>
 #include <zephyr/drivers/pinctrl.h>
@@ -489,17 +491,6 @@ static struct gptp_hdr *check_gptp_msg(struct net_if *iface,
 	return gptp_hdr;
 }
 
-static bool need_timestamping(struct gptp_hdr *hdr)
-{
-	switch (hdr->message_type) {
-	case GPTP_SYNC_MESSAGE:
-	case GPTP_PATH_DELAY_RESP_MESSAGE:
-		return true;
-	default:
-		return false;
-	}
-}
-
 static void update_pkt_priority(struct gptp_hdr *hdr, struct net_pkt *pkt)
 {
 	if (GPTP_IS_EVENT_MSG(hdr->message_type)) {
@@ -507,6 +498,97 @@ static void update_pkt_priority(struct gptp_hdr *hdr, struct net_pkt *pkt)
 	} else {
 		net_pkt_set_priority(pkt, NET_PRIORITY_IC);
 	}
+}
+#endif
+
+#if defined(CONFIG_PTP_CLOCK_SAM_GMAC)
+/* The TSU capture registers are shared by all packets of each event class. */
+static int ptp_event_class(struct net_pkt *pkt, bool *peer_event)
+{
+	uint8_t data[80];
+	size_t len = net_buf_linearize(data, sizeof(data), pkt->frags, 0, sizeof(data));
+	size_t offset = sizeof(struct net_eth_hdr);
+	uint16_t type;
+	uint8_t msg;
+	uint8_t event_mask;
+
+	if (len < offset) {
+		return -ENOMSG;
+	}
+	type = ((uint16_t)data[12] << 8) | data[13];
+	if (type == NET_ETH_PTYPE_VLAN) {
+		if (len < sizeof(struct net_eth_hdr) + NET_ETH_VLAN_HDR_SIZE) {
+			return -ENOMSG;
+		}
+		type = ((uint16_t)data[16] << 8) | data[17];
+		offset += NET_ETH_VLAN_HDR_SIZE;
+	}
+	if (type == NET_ETH_PTYPE_IP) {
+		size_t ip_len;
+
+		if (len < offset + NET_IPV4H_LEN || (data[offset] >> 4) != 4U ||
+		    data[offset + 9U] != NET_IPPROTO_UDP || data[offset + 16U] != 224U ||
+		    data[offset + 17U] != 0U ||
+		    !((data[offset + 18U] == 1U && data[offset + 19U] == 129U) ||
+		      (data[offset + 18U] == 0U && data[offset + 19U] == 107U))) {
+			return -ENOMSG;
+		}
+		ip_len = (data[offset] & 0x0fU) * 4U;
+		event_mask = data[offset + 18U] == 1U ?
+			BIT(GPTP_SYNC_MESSAGE) | BIT(GPTP_DELAY_REQ_MESSAGE) :
+			BIT(GPTP_PATH_DELAY_REQ_MESSAGE) | BIT(GPTP_PATH_DELAY_RESP_MESSAGE);
+		if (ip_len < NET_IPV4H_LEN || len < offset + ip_len + NET_UDPH_LEN + 2U ||
+		    (data[offset + 6U] & 0x3fU) != 0U || data[offset + 7U] != 0U) {
+			return -ENOMSG;
+		}
+		offset += ip_len;
+	} else if (type == NET_ETH_PTYPE_IPV6) {
+		static const uint8_t zeroes[12];
+		const uint8_t *dst = &data[offset + 24U];
+
+		if (len < offset + NET_IPV6H_LEN + NET_UDPH_LEN + 2U ||
+		    (data[offset] >> 4) != 6U ||
+		    data[offset + 6U] != NET_IPPROTO_UDP || dst[0] != 0xffU ||
+		    memcmp(&dst[2], zeroes, sizeof(zeroes)) != 0 ||
+		    !((dst[14] == 1U && dst[15] == 0x81U) ||
+		      (dst[1] == 2U && dst[14] == 0U && dst[15] == 0x6bU))) {
+			return -ENOMSG;
+		}
+		event_mask = dst[14] == 1U ?
+			BIT(GPTP_SYNC_MESSAGE) | BIT(GPTP_DELAY_REQ_MESSAGE) :
+			BIT(GPTP_PATH_DELAY_REQ_MESSAGE) | BIT(GPTP_PATH_DELAY_RESP_MESSAGE);
+		offset += NET_IPV6H_LEN;
+	} else if (type == NET_ETH_PTYPE_PTP) {
+		static const uint8_t primary[] = {0x01, 0x1b, 0x19, 0x00, 0x00, 0x00};
+		static const uint8_t peer[] = {0x01, 0x80, 0xc2, 0x00, 0x00, 0x0e};
+
+		if (memcmp(data, primary, sizeof(primary)) != 0 &&
+		    memcmp(data, peer, sizeof(peer)) != 0) {
+			return -ENOMSG;
+		}
+		event_mask = memcmp(data, primary, sizeof(primary)) == 0 ?
+			BIT(GPTP_SYNC_MESSAGE) | BIT(GPTP_DELAY_REQ_MESSAGE) :
+			BIT(GPTP_SYNC_MESSAGE) | BIT(GPTP_PATH_DELAY_REQ_MESSAGE) |
+				BIT(GPTP_PATH_DELAY_RESP_MESSAGE);
+		goto ptp_header;
+	} else {
+		return -ENOMSG;
+	}
+	if (data[offset + 2U] != 1U || data[offset + 3U] != 63U) {
+		return -ENOMSG;
+	}
+	offset += NET_UDPH_LEN;
+
+ptp_header:
+	if (len < offset + 2U || (data[offset + 1U] & 0x0fU) != PTP_MAJOR_VERSION) {
+		return -ENOMSG;
+	}
+	msg = data[offset] & 0x0fU;
+	if (msg > GPTP_PATH_DELAY_RESP_MESSAGE || (event_mask & BIT(msg)) == 0U) {
+		return -ENOMSG;
+	}
+	*peer_event = msg >= GPTP_PATH_DELAY_REQ_MESSAGE;
+	return 0;
 }
 
 static inline struct net_ptp_time get_ptp_event_rx_ts(Gmac *gmac)
@@ -563,26 +645,7 @@ static inline struct net_ptp_time get_current_ts(Gmac *gmac)
 	return ts;
 }
 
-
-static inline void timestamp_tx_pkt(Gmac *gmac, struct gptp_hdr *hdr,
-				    struct net_pkt *pkt)
-{
-	struct net_ptp_time timestamp;
-
-	if (hdr) {
-		switch (hdr->message_type) {
-		case GPTP_SYNC_MESSAGE:
-			timestamp = get_ptp_event_tx_ts(gmac);
-			break;
-		default:
-			timestamp = get_ptp_peer_event_tx_ts(gmac);
-		}
-	} else {
-		timestamp = get_current_ts(gmac);
-	}
-
-	net_pkt_set_timestamp(pkt, &timestamp);
-}
+#if defined(CONFIG_NET_GPTP)
 
 static inline void timestamp_rx_pkt(Gmac *gmac, struct gptp_hdr *hdr,
 				    struct net_pkt *pkt)
@@ -606,6 +669,7 @@ static inline void timestamp_rx_pkt(Gmac *gmac, struct gptp_hdr *hdr,
 }
 
 #endif
+#endif
 
 static inline struct net_if *get_iface(struct eth_sam_dev_data *ctx)
 {
@@ -625,12 +689,6 @@ static void tx_completed(Gmac *gmac, struct gmac_queue *queue)
 	struct net_buf *frag;
 #if defined(CONFIG_PTP_CLOCK_SAM_GMAC)
 	struct net_pkt *pkt;
-#endif
-#if defined(CONFIG_NET_GPTP)
-	struct gptp_hdr *hdr;
-	struct eth_sam_dev_data *dev_data =
-		CONTAINER_OF(queue, struct eth_sam_dev_data,
-			     queue_list[queue->que_idx]);
 #endif
 
 	__ASSERT(tx_desc_list->buf[tx_desc_list->tail].w1 & GMAC_TXW1_USED,
@@ -655,17 +713,18 @@ static void tx_completed(Gmac *gmac, struct gmac_queue *queue)
 			if (sys_ringq_get(&queue->tx_frames, &pkt)) {
 				__ASSERT(false, "Failed to get pkt from tx_frames ringq");
 			}
+			if (net_pkt_is_tx_timestamping(pkt)) {
+				bool peer_event;
 
-#if defined(CONFIG_NET_GPTP)
-			hdr = check_gptp_msg(get_iface(dev_data),
-					     pkt, true);
+				if (ptp_event_class(pkt, &peer_event) == 0) {
+					struct net_ptp_time ts = peer_event ?
+						get_ptp_peer_event_tx_ts(gmac) : get_ptp_event_tx_ts(gmac);
 
-			timestamp_tx_pkt(gmac, hdr, pkt);
-
-			if (hdr && need_timestamping(hdr)) {
-				net_if_add_tx_timestamp(pkt);
+					net_pkt_set_timestamp(pkt, &ts);
+					net_if_add_tx_timestamp(pkt);
+				}
 			}
-#endif
+
 			net_pkt_unref(pkt);
 			LOG_DBG("Dropping pkt %p", pkt);
 #endif
@@ -1290,10 +1349,11 @@ static void eth_rx(struct gmac_queue *queue)
 		CONTAINER_OF(queue, struct eth_sam_dev_data,
 			     queue_list[queue->que_idx]);
 	struct net_pkt *rx_frame;
-#if defined(CONFIG_NET_GPTP)
+#if defined(CONFIG_PTP_CLOCK_SAM_GMAC)
 	const struct device *const dev = net_if_get_device(dev_data->iface);
-	const struct eth_sam_dev_cfg *const cfg = dev->config;
 	Gmac *gmac = (Gmac *)DEVICE_MMIO_GET(dev);
+#endif
+#if defined(CONFIG_NET_GPTP) && defined(CONFIG_PTP_CLOCK_SAM_GMAC)
 	struct gptp_hdr *hdr;
 #endif
 
@@ -1304,10 +1364,25 @@ static void eth_rx(struct gmac_queue *queue)
 	while (rx_frame) {
 		LOG_DBG("ETH rx");
 
-#if defined(CONFIG_NET_GPTP)
+#if defined(CONFIG_PTP_CLOCK_SAM_GMAC)
+		bool peer_event;
+		int ret = ptp_event_class(rx_frame, &peer_event);
+
+		if (ret == 0) {
+			struct net_ptp_time ts = peer_event ?
+				get_ptp_peer_event_rx_ts(gmac) : get_ptp_event_rx_ts(gmac);
+
+			net_pkt_set_timestamp(rx_frame, &ts);
+			net_pkt_set_rx_timestamping(rx_frame, true);
+		}
+#endif
+
+#if defined(CONFIG_NET_GPTP) && defined(CONFIG_PTP_CLOCK_SAM_GMAC)
 		hdr = check_gptp_msg(get_iface(dev_data), rx_frame, false);
 
-		timestamp_rx_pkt(gmac, hdr, rx_frame);
+		if (ret != 0) {
+			timestamp_rx_pkt(gmac, hdr, rx_frame);
+		}
 
 		if (hdr) {
 			update_pkt_priority(hdr, rx_frame);
@@ -1369,11 +1444,6 @@ static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 	unsigned int key;
 #endif
 	uint8_t pkt_prio;
-#if GMAC_MULTIPLE_TX_PACKETS == 0
-#if defined(CONFIG_NET_GPTP)
-	struct gptp_hdr *hdr;
-#endif
-#endif
 
 	__ASSERT(pkt, "buf pointer is NULL");
 	__ASSERT(pkt->frags, "Frame data missing");
@@ -1515,14 +1585,18 @@ static int eth_tx(const struct device *dev, struct net_pkt *pkt)
 	if (queue->err_tx_flushed_count != err_tx_flushed_count_at_entry) {
 		return -EIO;
 	}
-#if defined(CONFIG_NET_GPTP)
-#if defined(CONFIG_NET_GPTP)
-	hdr = check_gptp_msg(get_iface(dev_data), pkt, true);
-	timestamp_tx_pkt(gmac, hdr, pkt);
-	if (hdr && need_timestamping(hdr)) {
-		net_if_add_tx_timestamp(pkt);
+#if defined(CONFIG_PTP_CLOCK_SAM_GMAC)
+	if (net_pkt_is_tx_timestamping(pkt)) {
+		bool peer_event;
+
+		if (ptp_event_class(pkt, &peer_event) == 0) {
+			struct net_ptp_time ts = peer_event ? get_ptp_peer_event_tx_ts(gmac) :
+								     get_ptp_event_tx_ts(gmac);
+
+			net_pkt_set_timestamp(pkt, &ts);
+			net_if_add_tx_timestamp(pkt);
+		}
 	}
-#endif
 #endif
 #endif
 
