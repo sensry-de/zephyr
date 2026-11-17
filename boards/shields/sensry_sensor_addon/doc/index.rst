@@ -9,9 +9,9 @@ Sensry Sensor Addon
 Overview
 ********
 
-The Sensry Sensor Addon connects to the three 2 x 10-pin GPIO headers of a
-supported Nordic development kit. It combines motion, environmental, light
-and sound sensors with a real-time clock and GPIO expander.
+The Sensry Sensor Addon connects to the Nordic expansion headers of a
+supported development kit. It combines motion, environmental, light and sound
+sensors with a real-time clock and GPIO expander.
 
 .. list-table::
    :widths: 50 50
@@ -72,27 +72,34 @@ A board-specific configuration is included for:
 
 * :zephyr:board:`nrf54l15dk`: ``nrf54l15dk/nrf54l15/cpuapp``.
 
-The shield bus labels, controller nodes and shield header contacts are:
+The board bus labels, controllers and shield header physical pins are:
 
 .. list-table::
    :header-rows: 1
-   :widths: 25 22 53
+   :widths: 35 15 50
 
-   * - Shield label
-     - Devicetree node
-     - Shield header contacts
-   * - ``sensry_i2c``
-     - ``&i2c22``
+   * - Devicetree node
+     - Controller
+     - Shield header physical pins
+   * - ``&nordic_expansion_i2c``
+     - I2C22
      - SDA P1 pin 15, SCL P1 pin 14
-   * - ``sensry_spi``
-     - ``&spi21``
+   * - ``&nordic_expansion_spi_p2``
+     - SPI21
      - SCK P2 pin 9, MOSI P2 pin 11, MISO P2 pin 12
-   * - ``sensry_pdm``
-     - ``&pdm21``
+   * - ``&nordic_expansion_pdm``
+     - PDM21
      - CLK P1 pin 7, DIN P1 pin 8
 
 nRF54L15 DK configuration
 =========================
+
+The DK provides ``nordic_expansion_header`` for P1 and ``nordic_expansion_header_p2``
+for P2. GPIO specifiers use GPIO signal numbers, not physical pin numbers.
+The P2 map includes P2.06 through P2.10. P2.00 through P2.05 are omitted because
+they are connected to external flash rather than the header by default; using them
+on the header requires solder bridge changes. See the DK hardware documentation.
+The DK provides the bus instances and pinctrl used by the shield.
 
 SPI21 uses P2.06, P2.08 and P2.09 for SCK, MOSI and MISO. SPI22 cannot route
 to these pins, and cross-domain SPI routing requires constant-latency mode.

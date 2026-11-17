@@ -3,8 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#include "nrf54l15dk_nrf54l15_cpuapp-pinctrl.dtsi"
-
 / {
 	chosen {
 		zephyr,console = &uart30;
@@ -56,30 +54,14 @@
 /*
  * The shield wires SPI to the P2 header (P2.06/P2.08/P2.09). On the nRF54L15,
  * SPIM22 can only use P1 pins; P2 routing is available on SPIM20/SPIM21 and
- * only in constant-latency mode. Use SPI21 and leave the DK's
- * nordic_expansion_spi (SPI22) binding on the P1 header untouched.
+ * only in constant-latency mode. Use SPI21 and leave the DK's SPI22
+ * configuration on the P1 header untouched.
  */
-&sensry_i2c {
+&nordic_expansion_i2c {
 	clock-frequency = <I2C_BITRATE_FAST>;
-	pinctrl-0 = <&i2c22_default>;
-	pinctrl-1 = <&i2c22_sleep>;
-	pinctrl-names = "default", "sleep";
 	status = "okay";
 };
 
-&sensry_spi {
-	/* Index matches the device reg: 0 = BMI270 (P1.10), 1 = LIS2MDL (P1.14). */
-	cs-gpios = <&nordic_expansion_header 10 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>,
-		   <&nordic_expansion_header 14 (GPIO_ACTIVE_LOW | GPIO_PULL_UP)>;
-	pinctrl-0 = <&spi21_default>;
-	pinctrl-1 = <&spi21_sleep>;
-	pinctrl-names = "default", "sleep";
+&nordic_expansion_spi_p2 {
 	status = "okay";
-};
-
-&sensry_pdm {
-	clock-source = "PCLK32M_HFXO";
-	pinctrl-0 = <&pdm21_default>;
-	pinctrl-1 = <&pdm21_sleep>;
-	pinctrl-names = "default", "sleep";
 };
